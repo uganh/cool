@@ -1,0 +1,7 @@
+# Auto generated
+src/cool-lex.cc
+src/cool-parse.cc
+src/cool-parse.h
+src/cool-parse.output
+
+build/
