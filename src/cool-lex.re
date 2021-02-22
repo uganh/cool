@@ -29,7 +29,7 @@
 
 namespace yy {
 
-parser::symbol_type yylex(LexState &in, Strtab &strtab) {
+parser::symbol_type yylex(LexState &in) {
   const char *yytext;
   int yystate = yycINITIAL;
   unsigned nested_comments = 0;
@@ -286,11 +286,11 @@ more:
   }
 
   <INITIAL> [A-Z][a-zA-Z0-9_]* {
-    RETURN_TOKEN_AND_VALUE(TYPEID, strtab.get(std::string(yytext, yyleng)));
+    RETURN_TOKEN_AND_VALUE(TYPEID, std::string(yytext, yyleng));
   }
 
   <INITIAL> [a-z][a-zA-Z0-9_]* {
-    RETURN_TOKEN_AND_VALUE(OBJECTID, strtab.get(std::string(yytext, yyleng)));
+    RETURN_TOKEN_AND_VALUE(OBJECTID, std::string(yytext, yyleng));
   }
  */
 }

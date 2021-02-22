@@ -6,20 +6,21 @@
 #include <unordered_map>
 #include <vector>
 
-template <typename Info> class Symtab {
+template <typename InfoType> class Symtab {
   struct Entry {
     unsigned depth;
     /* The last hidden definition */
     unsigned outer;
+    /* Note: Reference is OK */
     const std::string &name;
-    Info *info;
+    InfoType info;
   };
 
 private:
   unsigned depth;
   std::vector<Entry> entries;
   // Map from name to index of `entries`
-  std::unordered_map<std::string, unsigned> map;
+  std::unordered_map<std::string, unsigned> dict;
 
 public:
   Symtab(void) : depth(0) {}
@@ -38,33 +39,53 @@ public:
         break;
       }
 
-      if (entries.outer != -1) {
-        map[entry.name] = entry.outer;
+      if (entry.outer != -1) {
+        dict[entry.name] = entry.outer;
       } else {
-        map.erase(entry.name);
+        dict.erase(entry.name);
       }
 
-      emtries.pop_back();
+      entries.pop_back();
     }
     depth--;
   }
 
-  void define(const std::string &name, Info *info) {
+  void define(const std::string &name, InfoType &&info) {
     unsigned outer = -1;
 
-    auto iter = map.find(Name);
-    if (iter != map.cend()) {
+    auto iter = dict.find(name);
+    if (iter != dict.cend()) {
       outer = iter->second;
     }
 
-    const std::string &name_ref = map.insert(name, entries.size()).first.first;
-    Values.push_back({depth, outer, name_ref, info});
+    const std::string &name_ref = dict.insert(name, entries.size()).first->first;
+    entries.push_back({depth, outer, name_ref, std::move(info)});
   }
 
-  Info *lookup(const std::string &name) const {
-    auto iter = map.find(Name);
-    if (iter != iter.cend()) {
-      return entries[iter->second].info;
+  void define(const std::string &name, const InfoType &info) {
+    unsigned outer = -1;
+
+    auto iter = dict.find(name);
+    if (iter != dict.cend()) {
+      outer = iter->second;
+    }
+
+    const std::string &name_ref = dict.insert({name, entries.size()}).first->first;
+    entries.push_back({depth, outer, name_ref, info});
+  }
+
+  InfoType *lookup(const std::string &name) {
+    auto iter = dict.find(name);
+    if (iter != dict.cend()) {
+      return &entries[iter->second].info;
+    }
+    return nullptr;
+  }
+
+  const InfoType *lookup(const std::string &name) const {
+    auto iter = dict.find(name);
+    if (iter != dict.cend()) {
+      return &entries[iter->second].info;
     }
     return nullptr;
   }

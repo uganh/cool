@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_set>
 
-using Symbol = const std::string *;
+#include "symbol.h"
 
 class Strtab {
   std::unordered_set<std::string> set;
@@ -16,7 +16,8 @@ public:
   Strtab &operator=(const Strtab &) = delete;
 
   Symbol get(const std::string &str) {
-    return &*set.insert(str).first;
+    /* Note: The pointer never fail */
+    return Symbol(*set.insert(str).first);
   }
 };
 

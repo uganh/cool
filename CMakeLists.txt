@@ -28,7 +28,11 @@ add_executable(
   COOLC
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-lex.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-tree.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-type.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-type.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/logger.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/semant.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/strtab.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/symtab.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/utilities.cc

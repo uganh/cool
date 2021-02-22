@@ -4,7 +4,7 @@
 
 #include "cool-parse.h"
 #include "cool-tree.h"
-#include "strtab.h"
+#include "logger.h"
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -13,11 +13,12 @@ int main(int argc, char *argv[]) {
   }
 
   LexState in(argv[1]);
-  Strtab strtab;
   std::unique_ptr<Program> program;
 
-  yy::parser(in, strtab, program).parse();
+  yy::parser(in, program).parse();
 
+  Logger logger(std::cerr);
+  program->semant(logger);
   program->dump(std::cout);
 
   return 0;

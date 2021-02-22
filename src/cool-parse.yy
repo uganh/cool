@@ -8,7 +8,6 @@
 %code requires {
 #include "cool-lex.h"
 #include "cool-tree.h"
-#include "strtab.h"
 }
 
 %code {
@@ -16,12 +15,11 @@
 #include <iostream>
 
 namespace yy {
-parser::symbol_type yylex(LexState &in, Strtab &strtab);
+parser::symbol_type yylex(LexState &in);
 }
 }
 
 %param {LexState &in}
-%param {Strtab &strtab}
 %parse-param {std::unique_ptr<Program> &program}
 
 %nterm <std::unique_ptr<Class>> ClassDeclaration
@@ -32,8 +30,8 @@ parser::symbol_type yylex(LexState &in, Strtab &strtab);
 %nterm <std::unique_ptr<Expression>> Argument
 %nterm <std::vector<std::unique_ptr<Expression>>> OptionalArguments Arguments
 %nterm <std::vector<std::unique_ptr<Feature>>> FeatureDeclarations
-%nterm <std::unique_ptr<Parameter>> Parameter
-%nterm <std::vector<std::unique_ptr<Parameter>>> OptionalParameters Parameters
+%nterm <std::pair<std::string, std::string>> Parameter
+%nterm <std::vector<std::pair<std::string, std::string>>> OptionalParameters Parameters
 %nterm <std::unique_ptr<Definition>> Definition
 %nterm <std::vector<std::unique_ptr<Definition>>> Definitions
 %nterm <std::unique_ptr<CaseBranch>> CaseBranch
@@ -46,8 +44,8 @@ parser::symbol_type yylex(LexState &in, Strtab &strtab);
 /* String constants may be at most 1024 characters long. */
 %token <std::string> TEXT_STRING
 
-%token <Symbol> TYPEID
-%token <Symbol> OBJECTID
+%token <std::string> TYPEID
+%token <std::string> OBJECTID
 
 %token LE "<="
 %token ASSIGN "<-"
@@ -137,7 +135,7 @@ ClassDeclarations:
 
 ClassDeclaration:
     T_CLASS TYPEID '{' FeatureDeclarations '}' ';' {
-      $$ = std::make_unique<Class>($2, strtab.get("Object"), std::move($4));
+      $$ = std::make_unique<Class>($2, "Object", std::move($4));
     }
   | T_CLASS TYPEID T_INHERITS TYPEID '{' FeatureDeclarations '}' ';' {
       $$ = std::make_unique<Class>($2, $4, std::move($6));
@@ -168,7 +166,8 @@ FeatureDeclaration:
 
 OptionalParameters:
     %empty {
-      $$ = std::vector<std::unique_ptr<Parameter>>();
+      $$ = {};
+      // $$ = std::vector<std::pair<std::string, std::string>>();
     }
   | Parameters {
       $$ = std::move($1);
@@ -177,7 +176,7 @@ OptionalParameters:
 
 Parameters:
     Parameter {
-      $$ = std::vector<std::unique_ptr<Parameter>>();
+      $$ = std::vector<std::pair<std::string, std::string>>();
       $$.emplace_back(std::move($1));
     }
   | Parameters ',' Parameter {
@@ -188,7 +187,7 @@ Parameters:
 
 Parameter:
     OBJECTID ':' TYPEID {
-      $$ = std::make_unique<Parameter>($1, $3);
+      $$ = std::make_pair($1, $3);
     }
   ;
 
@@ -212,20 +211,23 @@ Expression:
       $$ = std::move($2);
     }
   | OBJECTID "<-" Expression {
-      $$ = std::make_unique<Assign>($1, std::move($3));
+      $$ = std::make_unique<Assign>(
+        std::make_unique<Object>($1), std::move($3));
     }
   | OBJECTID '(' OptionalArguments ')' {
-      auto self = std::make_unique<Object>(strtab.get("self"));
+      auto self = std::make_unique<Object>("self");
       $$ = std::make_unique<Dispatch>(std::move(self), $1, std::move($3));
     }
   | Expression '.' OBJECTID '(' OptionalArguments ')' {
       $$ = std::make_unique<Dispatch>(std::move($1), $3, std::move($5));
     }
   | Expression '@' TYPEID '.' OBJECTID '(' OptionalArguments ')' {
-      $$ = std::make_unique<StaticDispatch>(std::move($1), $3, $5, std::move($7));
+      $$ = std::make_unique<StaticDispatch>(
+        std::move($1), $3, $5, std::move($7));
     }
   | T_IF Expression T_THEN Expression T_ELSE Expression T_FI {
-      $$ = std::make_unique<Conditional>(std::move($2), std::move($4), std::move($6));
+      $$ = std::make_unique<Conditional>(
+        std::move($2), std::move($4), std::move($6));
     }
   | T_WHILE Expression T_LOOP Expression T_POOL {
       $$ = std::make_unique<Loop>(std::move($2), std::move($4));
@@ -246,31 +248,31 @@ Expression:
       $$ = std::make_unique<Isvoid>(std::move($2));
     }
   | Expression '+' Expression {
-      $$ = std::make_unique<Binary>(Binary::ADD, std::move($1), std::move($3));
+      $$ = std::make_unique<Arithmetic>('+', std::move($1), std::move($3));
     }
   | Expression '-' Expression {
-      $$ = std::make_unique<Binary>(Binary::SUB, std::move($1), std::move($3));
+      $$ = std::make_unique<Arithmetic>('-', std::move($1), std::move($3));
     }
   | Expression '*' Expression {
-      $$ = std::make_unique<Binary>(Binary::MUL, std::move($1), std::move($3));
+      $$ = std::make_unique<Arithmetic>('*', std::move($1), std::move($3));
     }
   | Expression '/' Expression {
-      $$ = std::make_unique<Binary>(Binary::DIV, std::move($1), std::move($3));
+      $$ = std::make_unique<Arithmetic>('/', std::move($1), std::move($3));
     }
   | Expression '<' Expression {
-      $$ = std::make_unique<Binary>(Binary::LT, std::move($1), std::move($3));
+      $$ = std::make_unique<Logical>(Logical::LT, std::move($1), std::move($3));
     }
   | Expression "<=" Expression {
-      $$ = std::make_unique<Binary>(Binary::LE, std::move($1), std::move($3));
+      $$ = std::make_unique<Logical>(Logical::LE, std::move($1), std::move($3));
     }
   | Expression '=' Expression {
-      $$ = std::make_unique<Binary>(Binary::EQ, std::move($1), std::move($3));
+      $$ = std::make_unique<Logical>(Logical::EQ, std::move($1), std::move($3));
     }
   | '~' Expression {
-      $$ = std::make_unique<Unary>(Unary::NEG, std::move($2));
+      $$ = std::make_unique<Negate>(std::move($2));
     }
   | T_NOT Expression {
-      $$ = std::make_unique<Unary>(Unary::NOT, std::move($2));
+      $$ = std::make_unique<Not>(std::move($2));
     }
   ;
 
