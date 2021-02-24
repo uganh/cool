@@ -4,4 +4,13 @@ src/cool-parse.cc
 src/cool-parse.h
 src/cool-parse.output
 
+*.dSYM/
+
+# Build directory
 build/
+
+# Output
+example/cgen
+example/fib.s
+example/wrap_fib
+
