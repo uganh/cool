@@ -1,0 +1,7 @@
+
+build/
+
+# Auto-generated files
+*.gen.cc
+*.gen.h
+*.gen.output
