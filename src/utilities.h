@@ -4,4 +4,4 @@
 
 #include <ostream>
 
-void dump_token(std::ostream &out, int lineno, int token, YYSTYPE *yylval_ptr);
+void dump_token(std::ostream &out, int lineno, int token, yy::parser::value_type *yylval_ptr);

@@ -21,7 +21,7 @@ public:
   LexState(const LexState &) = delete;
   LexState &operator=(const LexState &) = delete;
 
-  int lex(YYSTYPE *yylval_ptr);
+  int lex(yy::parser::value_type *yylval_ptr);
 
   unsigned int line_number(void) const {
     return curr_lineno;

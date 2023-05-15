@@ -1,6 +1,10 @@
 #include "cool-lex.h"
 
-int LexState::lex(YYSTYPE *yylval_ptr) {
+#include <cstdlib>
+
+#define yyleng static_cast<size_t>(YYCURSOR - yytext)
+
+int LexState::lex(yy::parser::value_type *yylval_ptr) {
   const char *yytext, *YYMARKER;
 
 loop:
@@ -17,15 +21,15 @@ loop:
   * {
     if (YYCURSOR > YYLIMIT) {
       --YYCURSOR;
-      return 0;
+      return TOKID(END);
     }
 
     // TODO: When an invalid character (one that can't begin any token) is
     // encountered, a string containing just that character should be returned
     // as the error string. Resume lexing at the following character.
 
-    yylval_ptr->errs = "Invalid character";
-    return TK_ERROR;
+    yylval_ptr->emplace<const char *>("Invalid character");
+    return TOKID(ERROR);
   }
 
   [\t\v\f\r ]+ {
@@ -97,13 +101,13 @@ loop:
       }
     }
 
-    yylval_ptr->errs = "EOF in comment";
-    return TK_ERROR;
+    yylval_ptr->emplace<const char *>("EOF in comment");
+    return TOKID(ERROR);
   }
 
   "*)" {
-    yylval_ptr->errs = "Unmatched *)";
-    return TK_ERROR;
+    yylval_ptr->emplace<const char *>("Unmatched *)");
+    return TOKID(ERROR);
   }
 
   ["] {
@@ -115,24 +119,25 @@ loop:
     while (YYCURSOR < YYLIMIT) {
       switch (c = *YYCURSOR++) {
         case '\0':
-          yylval_ptr->errs = "String contains null character";
-          return TK_ERROR;
+          yylval_ptr->emplace<const char *>("String contains null character");
+          return TOKID(ERROR);
         case '\n':
           if (*YYCURSOR == '\r') {
             ++YYCURSOR;
           }
           ++curr_lineno;
-          yylval_ptr-> errs = "Unterminated string constant";
-          return TK_ERROR;
+          yylval_ptr->emplace<const char *>("Unterminated string constant");
+          return TOKID(ERROR);
         case '\r':
           if (*YYCURSOR == '\n') {
             ++YYCURSOR;
           }
           ++curr_lineno;
-          yylval_ptr-> errs = "Unterminated string constant";
-          return TK_ERROR;
+          yylval_ptr->emplace<const char *>("Unterminated string constant");
+          return TOKID(ERROR);
         case '"':
-          return TK_STRING;
+          yylval_ptr->emplace<std::string>(string_literal);
+          return TOKID(STRING);
         case '\\':
           if (YYCURSOR < YYLIMIT) {
             switch (c = *YYCURSOR++) {
@@ -169,14 +174,13 @@ loop:
       }
     }
 
-    yylval_ptr->errs = "EOF in string constant";
-    return TK_ERROR;
+    yylval_ptr->emplace<const char *>("EOF in string constant");
+    return TOKID(ERROR);
   }
 
   digit+ {
-    // TODO
-    yylval_ptr->ival = 0;
-    return TK_NUMBER;
+    yylval_ptr->emplace<long>(std::strtol(yytext, NULL, 10));
+    return TOKID(NUMBER);
   }
 
   [()*+,-./:;<=@{}~] {
@@ -184,99 +188,101 @@ loop:
   }
 
   "<=" {
-    return TK_LE;
+    return TOKID(LE);
   }
 
   "<-" {
-    return TK_ASSIGN;
+    return TOKID(ASSIGN);
   }
 
   "=>" {
-    return TK_DARROW;
+    return TOKID(DARROW);
   }
 
   'case' {
-    return TK_CASE;
+    return TOKID(CASE);
   }
 
   'class' {
-    return TK_CLASS;
+    return TOKID(CLASS);
   }
 
   'else' {
-    return TK_ELSE;
+    return TOKID(ELSE);
   }
 
   'esac' {
-    return TK_ESAC;
+    return TOKID(ESAC);
   }
 
   "f" 'alse' {
-    return TK_FALSE;
+    return TOKID(FALSE);
   }
 
   'fi' {
-    return TK_FI;
+    return TOKID(FI);
   }
 
   'if' {
-    return TK_IF;
+    return TOKID(IF);
   }
 
   'in' {
-    return TK_IN;
+    return TOKID(IN);
   }
 
   'inherits' {
-    return TK_INHERITS;
+    return TOKID(INHERITS);
   }
 
   'isvoid' {
-    return TK_ISVOID;
+    return TOKID(ISVOID);
   }
 
   'let' {
-    return TK_LET;
+    return TOKID(LET);
   }
 
   'loop' {
-    return TK_LOOP;
+    return TOKID(LOOP);
   }
 
   'new' {
-    return TK_NEW;
+    return TOKID(NEW);
   }
 
   'not' {
-    return TK_NOT;
+    return TOKID(NOT);
   }
 
   'of' {
-    return TK_OF;
+    return TOKID(OF);
   }
 
   'pool' {
-    return TK_POOL;
+    return TOKID(POOL);
   }
 
   'then' {
-    return TK_THEN;
+    return TOKID(THEN);
   }
 
   "t" 'rue' {
-    return TK_TRUE;
+    return TOKID(TRUE);
   }
 
   'while' {
-    return TK_WHILE;
+    return TOKID(WHILE);
   }
 
   [A-Z] ident* {
-    return TK_TYPEID;
+    yylval_ptr->emplace<Symbol *>(strtab.new_string(std::string(yytext, yyleng)));
+    return TOKID(TYPEID);
   }
 
   [a-z] ident* {
-    return TK_OBJECTID;
+    yylval_ptr->emplace<Symbol *>(strtab.new_string(std::string(yytext, yyleng)));
+    return TOKID(OBJECTID);
   }
  */
 }

@@ -6,9 +6,6 @@
 #include <iostream>
 
 int main(int argc, char *argv[]) {
-  int token;
-  YYSTYPE yylval;
-
   int opt_index = 1;
 
   while (opt_index < argc) {
@@ -20,14 +17,27 @@ int main(int argc, char *argv[]) {
       return -1;
     }
 
-    std::cout << "#name \"" << filename << "\"" << std::endl;
-  
     LexState lexer(stream);
+    stream.close();
+
+#if 0
+    std::cout << "#name \"" << filename << "\"" << std::endl;
+
+    int token;
+    yy::parser::value_type yylval;
+
     while ((token = lexer.lex(&yylval)) != 0) {
       dump_token(std::cout, lexer.line_number(), token, &yylval);
     }
+#else
+    ASTContext context;
 
-    stream.close();
+    if (yy::parser(lexer, context).parse() != 0) {
+      std::cerr << "Compilation halted due to lex or parse errors" << std::endl;
+      std::cerr << "At line " << lexer.line_number() << std::endl;
+      return -1;
+    }
+#endif    
   }
 
   return 0;

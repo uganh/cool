@@ -31,75 +31,78 @@ void print_escaped_string(std::ostream &out, const char *str) {
 
 const char *token_to_string(int token) {
   switch (token) {
-    case 0:           return "EOF";
-    case '(':         return "'('";
-    case ')':         return "')'";
-    case '*':         return "'*'";
-    case '+':         return "'+'";
-    case ',':         return "','";
-    case '-':         return "'-'";
-    case '.':         return "'.'";
-    case '/':         return "'/'";
-    case ':':         return "':'";
-    case ';':         return "';'";
-    case '<':         return "'<'";
-    case '=':         return "'='";
-    case '@':         return "'@'";
-    case '{':         return "'{'";
-    case '}':         return "'}'";
-    case '~':         return "'~'";
-    case TK_CASE:     return "CASE";
-    case TK_CLASS:    return "CLASS";
-    case TK_ELSE:     return "ELSE";
-    case TK_ESAC:     return "ESAC";
-    case TK_FALSE:    return "BOOL_CONST";
-    case TK_FI:       return "FI";
-    case TK_IF:       return "IF";
-    case TK_IN:       return "IN";
-    case TK_INHERITS: return "INHERITS";
-    case TK_ISVOID:   return "ISVOID";
-    case TK_LET:      return "LET";
-    case TK_LOOP:     return "LOOP";
-    case TK_NEW:      return "NEW";
-    case TK_NOT:      return "NOT";
-    case TK_OF:       return "OF";
-    case TK_POOL:     return "POOL";
-    case TK_THEN:     return "THEN";
-    case TK_TRUE:     return "BOOL_CONST";
-    case TK_WHILE:    return "WHILE";
-    case TK_NUMBER:   return "INT_CONST";
-    case TK_STRING:   return "STR_CONST";
-    case TK_OBJECTID: return "OBJECTID";
-    case TK_TYPEID:   return "TYPEID";
-    case TK_ASSIGN:   return "ASSIGN";
-    case TK_DARROW:   return "DARROW";
-    case TK_LE:       return "LE";
-    case TK_ERROR:    return "ERROR";
-    default:          return "<Invalid Token>";
+    case TOKID(END):      return "EOF";
+    case '(':             return "'('";
+    case ')':             return "')'";
+    case '*':             return "'*'";
+    case '+':             return "'+'";
+    case ',':             return "','";
+    case '-':             return "'-'";
+    case '.':             return "'.'";
+    case '/':             return "'/'";
+    case ':':             return "':'";
+    case ';':             return "';'";
+    case '<':             return "'<'";
+    case '=':             return "'='";
+    case '@':             return "'@'";
+    case '{':             return "'{'";
+    case '}':             return "'}'";
+    case '~':             return "'~'";
+    case TOKID(CASE):     return "CASE";
+    case TOKID(CLASS):    return "CLASS";
+    case TOKID(ELSE):     return "ELSE";
+    case TOKID(ESAC):     return "ESAC";
+    case TOKID(FALSE):    return "BOOL_CONST";
+    case TOKID(FI):       return "FI";
+    case TOKID(IF):       return "IF";
+    case TOKID(IN):       return "IN";
+    case TOKID(INHERITS): return "INHERITS";
+    case TOKID(ISVOID):   return "ISVOID";
+    case TOKID(LET):      return "LET";
+    case TOKID(LOOP):     return "LOOP";
+    case TOKID(NEW):      return "NEW";
+    case TOKID(NOT):      return "NOT";
+    case TOKID(OF):       return "OF";
+    case TOKID(POOL):     return "POOL";
+    case TOKID(THEN):     return "THEN";
+    case TOKID(TRUE):     return "BOOL_CONST";
+    case TOKID(WHILE):    return "WHILE";
+    case TOKID(NUMBER):   return "INT_CONST";
+    case TOKID(STRING):   return "STR_CONST";
+    case TOKID(OBJECTID): return "OBJECTID";
+    case TOKID(TYPEID):   return "TYPEID";
+    case TOKID(ASSIGN):   return "ASSIGN";
+    case TOKID(DARROW):   return "DARROW";
+    case TOKID(LE):       return "LE";
+    case TOKID(ERROR):    return "ERROR";
+    default:              return "<Invalid Token>";
   }
 }
 
-void dump_token(std::ostream &out, int lineno, int token, YYSTYPE *yylval_ptr) {
+void dump_token(std::ostream &out, int lineno, int token, yy::parser::value_type *yylval_ptr) {
   out << "#" << lineno << " " << token_to_string(token);
 
   switch (token) {
-    case TK_TRUE:
+    case TOKID(TRUE):
       out << " true";
       break;
-    case TK_FALSE:
+    case TOKID(FALSE):
       out << " false";
       break;
-    case TK_NUMBER:
-      out << " " << yylval_ptr->ival;
-    case TK_STRING:
-      // TODO
+    case TOKID(NUMBER):
+      out << " " << yylval_ptr->as<long>();
       break;
-    case TK_OBJECTID:
-    case TK_TYPEID:
-      // TODO
+    case TOKID(STRING):
+      out << " \"";
+      print_escaped_string(out, yylval_ptr->as<std::string>().c_str());
+      out << "\"";
       break;
-    case TK_ERROR:
-      out << " \"" << yylval_ptr->errs << "\"";
+    case TOKID(OBJECTID):
+    case TOKID(TYPEID):
+      out << " " << yylval_ptr->as<Symbol *>()->to_string();
+      break;
+    case TOKID(ERROR):
+      out << " \"" << yylval_ptr->as<const char *>() << "\"";
       break;
   }
 
