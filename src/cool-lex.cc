@@ -4,11 +4,13 @@
 
 #define yyleng static_cast<size_t>(YYCURSOR - yytext)
 
-int LexState::lex(yy::parser::value_type *yylval_ptr) {
+int LexState::lex(yy::parser::value_type *yylval_ptr, yy::parser::location_type *yylloc_ptr) {
   const char *yytext, *YYMARKER;
 
 loop:
   yytext = YYCURSOR;
+
+  *yylloc_ptr = curr_lineno;
 
 /*!re2c
   re2c:define:YYCTYPE = char;

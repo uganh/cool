@@ -4,4 +4,6 @@
 
 #include <ostream>
 
-void dump_token(std::ostream &out, int lineno, int token, yy::parser::value_type *yylval_ptr);
+void print_escaped_string(std::ostream& out, const char* str);
+
+void dump_token(std::ostream &out, int line, int token, yy::parser::value_type *yylval_ptr);

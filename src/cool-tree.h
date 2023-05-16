@@ -11,19 +11,13 @@ using ScopedSymtab = Symtab<Symbol>;
 
 using ScopedSymtabGuard = SymtabGuard<Symbol>;
 
+class Program;
+
 class TreeNode {
-  unsigned int lineno = 0;
-
 public:
-  // explicit TreeNode(unsigned int lineno) : lineno(lineno) {}
-
   virtual ~TreeNode(void) = default;
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const = 0;
-
-  unsigned int line_number(void) const {
-    return lineno;
-  }
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const = 0;
 };
 
 class Expression : public TreeNode {
@@ -37,7 +31,7 @@ class Assign : public Expression {
 public:
   Assign(Symbol *left, Expression *expr) : left(left), expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Dispatch : public Expression {
@@ -50,7 +44,7 @@ public:
   Dispatch(Expression *expr, Symbol *name, Symbol *type, std::vector<Expression *> args)
     : expr(expr), name(name), type(type), args(std::move(args)) {}
   
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Conditional : public Expression {
@@ -62,7 +56,7 @@ public:
   Conditional(Expression *pred, Expression *then, Expression *elSe)
     : pred(pred), then(then), elSe(elSe) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Loop : public Expression {
@@ -72,7 +66,7 @@ class Loop : public Expression {
 public:
   Loop(Expression *pred, Expression *body) : pred(pred), body(body) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Block : public Expression {
@@ -81,11 +75,11 @@ class Block : public Expression {
 public:
   explicit Block(std::vector<Expression *> exprs) : exprs(std::move(exprs)) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Definition : public TreeNode {
-  Symbol *name;
+  Symbol *name; // Cannot be self
   Symbol *type;
   Expression *init;
 
@@ -93,7 +87,7 @@ public:
   Definition(Symbol *name, Symbol *type, Expression *init = nullptr)
     : name(name), type(type), init(init) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Let : public Expression {
@@ -104,11 +98,11 @@ public:
   Let(std::vector<Definition *> defs, Expression *body)
     : defs(std::move(defs)), body(body) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Branch : public TreeNode {
-  Symbol *name;
+  Symbol *name; // Cannot be self
   Symbol *type; // Cannot be SELF_TYPE
   Expression *expr;
 
@@ -116,7 +110,7 @@ public:
   Branch(Symbol *name, Symbol *type, Expression *expr)
     : name(name), type(type), expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Case : public Expression {
@@ -127,7 +121,7 @@ public:
   Case(Expression *expr, std::vector<Branch *> branches)
     : expr(expr), branches(std::move(branches)) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class New : public Expression {
@@ -136,7 +130,7 @@ class New : public Expression {
 public:
   explicit New(Symbol *type) : type(type) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class IsVoid : public Expression {
@@ -145,7 +139,7 @@ class IsVoid : public Expression {
 public:
   explicit IsVoid(Expression *expr) : expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 enum class ArithmeticOperator { ADD, SUB, MUL, DIV, };
@@ -159,7 +153,7 @@ public:
   Arithmetic(ArithmeticOperator op, Expression *op1, Expression *op2)
     : op(op), op1(op1), op2(op2) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Complement : public Expression {
@@ -168,7 +162,7 @@ class Complement : public Expression {
 public:
   explicit Complement(Expression *expr) : expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 enum class ComparisonOperator { LT, LE, EQ, };
@@ -182,7 +176,7 @@ public:
   Comparison(ComparisonOperator op, Expression *op1, Expression *op2)
     : op(op), op1(op1), op2(op2) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Not : public Expression {
@@ -191,7 +185,7 @@ class Not : public Expression {
 public:
   explicit Not(Expression *expr) : expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Object : public Expression {
@@ -200,7 +194,7 @@ class Object : public Expression {
 public:
   explicit Object(Symbol *name) : name(name) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Integer : public Expression {
@@ -209,7 +203,7 @@ class Integer : public Expression {
 public:
   explicit Integer(long value) : value(value) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class String : public Expression {
@@ -218,7 +212,7 @@ class String : public Expression {
 public:
   explicit String(const std::string &value) : value(value) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Boolean : public Expression {
@@ -227,7 +221,7 @@ class Boolean : public Expression {
 public:
   explicit Boolean(bool value) : value(value) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Feature : public TreeNode {
@@ -243,7 +237,7 @@ public:
   Attribute(Symbol *name, Symbol *type, Expression *init = nullptr)
     : name(name), type(type), init(init) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Formal : public TreeNode {
@@ -253,7 +247,7 @@ class Formal : public TreeNode {
 public:
   Formal(Symbol *name, Symbol *type) : name(name), type(type) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Method : public Feature {
@@ -266,7 +260,7 @@ public:
   Method(Symbol *name, std::vector<Formal *> formals, Symbol *type, Expression *expr)
     : name(name), formals(std::move(formals)), type(type), expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Class : public TreeNode {
@@ -278,18 +272,26 @@ public:
   Class(Symbol *name, Symbol *base, std::vector<Feature *> features)
     : name(name), base(base), features(std::move(features)) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents) const override;
+  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
 };
 
 class Program {
-  std::string source;
+  std::string name;
   std::vector<Class *> classes;
 
-public:
-  explicit Program(const std::string &source) : source(source) {}
+  std::unordered_map<const TreeNode *, unsigned int> nodes;
 
-  const std::string &getSource(void) const {
-    return source;
+public:
+  explicit Program(const std::string &name) : name(name) {}
+
+  ~Program(void) noexcept;
+
+  const std::string &getName(void) const {
+    return name;
+  }
+
+  unsigned int getLine(const TreeNode *node) const {
+    return nodes.find(node)->second;
   }
 
   void addClass(Class *claSs) {
@@ -297,23 +299,11 @@ public:
   }
 
   void dump(std::ostream &stream) const;
-};
-
-class ASTContext {
-  std::vector<TreeNode *> nodes;
-
-public:
-  ~ASTContext(void) {
-    for (auto node : nodes) {
-      delete node;
-    }
-    nodes.clear();
-  }
 
   template <typename NodeType, typename ...Args>
-  NodeType *new_tree_node(Args &&...args) {
+  NodeType *new_tree_node(unsigned int line, Args &&...args) {
     NodeType *node = new NodeType(std::forward<Args>(args)...);
-    nodes.push_back(node);
+    nodes.insert({ node, line });
     return node;
   }
 };

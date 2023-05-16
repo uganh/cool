@@ -25,17 +25,20 @@ int main(int argc, char *argv[]) {
 
     int token;
     yy::parser::value_type yylval;
+    yy::parser::location_type yylloc;
 
-    while ((token = lexer.lex(&yylval)) != 0) {
-      dump_token(std::cout, lexer.line_number(), token, &yylval);
+    while ((token = lexer.lex(&yylval, &yylloc)) != 0) {
+      dump_token(std::cout, yylloc, token, &yylval);
     }
 #else
-    ASTContext context;
+    std::unique_ptr<Program> program = std::make_unique<Program>(filename);
 
-    if (yy::parser(lexer, context).parse() != 0) {
+    if (yy::parser(lexer, program.get()).parse() != 0) {
       std::cerr << "Compilation halted due to lex or parse errors" << std::endl;
       return -1;
     }
+
+    program->dump(std::cout);
 #endif
   }
 

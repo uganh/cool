@@ -79,8 +79,8 @@ const char *token_to_string(int token) {
   }
 }
 
-void dump_token(std::ostream &out, int lineno, int token, yy::parser::value_type *yylval_ptr) {
-  out << "#" << lineno << " " << token_to_string(token);
+void dump_token(std::ostream &out, int line, int token, yy::parser::value_type *yylval_ptr) {
+  out << "#" << line << " " << token_to_string(token);
 
   switch (token) {
     case TOKID(TRUE):

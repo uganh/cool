@@ -3,9 +3,15 @@
 
 %expect 0
 
+%locations
+
+%define api.location.type {unsigned int}
+
 %define api.value.type variant
 
-%parse-param {LexState &lexer} {ASTContext &context}
+%define parse.error custom
+
+%parse-param {LexState &lexer} {Program *program}
 
 %code requires {
 #include "cool-tree.h"
@@ -20,10 +26,20 @@ class LexState;
 
 %code {
 #include "cool-lex.h"
+#include "utilities.h"
 
 #include <iostream>
 
-#define yylex(yylval_ptr) lexer.lex(yylval_ptr)
+#define YYLLOC_DEFAULT(Cur, Rhs, N)                                            \
+  do {                                                                         \
+    if (N) {                                                                   \
+      (Cur) = YYRHSLOC(Rhs, 1);                                                \
+    } else {                                                                   \
+      (Cur) = YYRHSLOC(Rhs, 0);                                                \
+    }                                                                          \
+  } while (0)
+
+#define yylex(yylval_ptr, yylloc_ptr) lexer.lex(yylval_ptr, yylloc_ptr)
 }
 
 %token END 0 "end of file"
@@ -101,16 +117,20 @@ Program:
   ;
 
 Classes:
-    Class
-  | Classes Class
+    Class {
+      program->addClass($1);
+    }
+  | Classes Class {
+      program->addClass($2);
+    }
   ;
 
 Class:
     CLASS TYPEID '{' Features '}' ';' {
-      $$ = context.new_tree_node<Class>($2, nullptr, std::move($4));
+      $$ = program->new_tree_node<Class>(@$, $2, nullptr, std::move($4));
     }
   | CLASS TYPEID INHERITS TYPEID '{' Features '}' ';' {
-      $$ = context.new_tree_node<Class>($2, $4, std::move($6));
+      $$ = program->new_tree_node<Class>(@$, $2, $4, std::move($6));
     }
   ;
 
@@ -126,13 +146,13 @@ Features:
 
 Feature:
     OBJECTID '(' OptionalFormals ')' ':' TYPEID '{' Expression '}' ';' {
-      $$ = context.new_tree_node<Method>($1, std::move($3), $6, $8);
+      $$ = program->new_tree_node<Method>(@$, $1, std::move($3), $6, $8);
     }
   | OBJECTID ':' TYPEID ';' {
-      $$ = context.new_tree_node<Attribute>($1, $3);
+      $$ = program->new_tree_node<Attribute>(@$, $1, $3);
     }
   | OBJECTID ':' TYPEID "<-" Expression ';' {
-      $$ = context.new_tree_node<Attribute>($1, $3, $5);
+      $$ = program->new_tree_node<Attribute>(@$, $1, $3, $5);
     }
   ;
 
@@ -158,88 +178,88 @@ Formals:
 
 Formal:
     OBJECTID ':' TYPEID {
-      $$ = context.new_tree_node<Formal>($1, $3);
+      $$ = program->new_tree_node<Formal>(@$, $1, $3);
     }
   ;
 
 Expression:
     OBJECTID "<-" Expression {
-      $$ = context.new_tree_node<Assign>($1, $3);
+      $$ = program->new_tree_node<Assign>(@$, $1, $3);
     }
   | Expression '.' OBJECTID '(' OptionalExpressions ')' {
-      $$ = context.new_tree_node<Dispatch>($1, $3, nullptr, $5);
+      $$ = program->new_tree_node<Dispatch>(@$, $1, $3, nullptr, $5);
     }
   | Expression '@' TYPEID '.' OBJECTID '(' OptionalExpressions ')' {
-      $$ = context.new_tree_node<Dispatch>($1, $3, $5, $7);
+      $$ = program->new_tree_node<Dispatch>(@$, $1, $3, $5, $7);
     }
   | OBJECTID '(' OptionalExpressions ')' {
-      $$ = context.new_tree_node<Dispatch>(nullptr, $1, nullptr, $3);
+      $$ = program->new_tree_node<Dispatch>(@$, nullptr, $1, nullptr, $3);
     }
   | IF Expression THEN Expression ELSE Expression FI {
-      $$ = context.new_tree_node<Conditional>($2, $4, $6);
+      $$ = program->new_tree_node<Conditional>(@$, $2, $4, $6);
     }
   | WHILE Expression LOOP Expression POOL {
-      $$ = context.new_tree_node<Loop>($2, $4);
+      $$ = program->new_tree_node<Loop>(@$, $2, $4);
     }
   | '{' ExpressionList '}' {
-      $$ = context.new_tree_node<Block>($2);
+      $$ = program->new_tree_node<Block>(@$, $2);
     }
   | LET Definitions IN Expression %prec DEFAULT {
-      $$ = context.new_tree_node<Let>($2, $4);
+      $$ = program->new_tree_node<Let>(@$, $2, $4);
     }
   | CASE Expression OF Branches ESAC {
-      $$ = context.new_tree_node<Case>($2, $4);
+      $$ = program->new_tree_node<Case>(@$, $2, $4);
     }
   | NEW TYPEID {
-      $$ = context.new_tree_node<New>($2);
+      $$ = program->new_tree_node<New>(@$, $2);
     }
   | ISVOID Expression {
-      $$ = context.new_tree_node<IsVoid>($2);
+      $$ = program->new_tree_node<IsVoid>(@$, $2);
     }
   | Expression '+' Expression {
-      $$ = context.new_tree_node<Arithmetic>(ArithmeticOperator::ADD, $1, $3);
+      $$ = program->new_tree_node<Arithmetic>(@$, ArithmeticOperator::ADD, $1, $3);
     }
   | Expression '-' Expression {
-      $$ = context.new_tree_node<Arithmetic>(ArithmeticOperator::SUB, $1, $3);
+      $$ = program->new_tree_node<Arithmetic>(@$, ArithmeticOperator::SUB, $1, $3);
     }
   | Expression '*' Expression {
-      $$ = context.new_tree_node<Arithmetic>(ArithmeticOperator::MUL, $1, $3);
+      $$ = program->new_tree_node<Arithmetic>(@$, ArithmeticOperator::MUL, $1, $3);
     }
   | Expression '/' Expression {
-      $$ = context.new_tree_node<Arithmetic>(ArithmeticOperator::DIV, $1, $3);
+      $$ = program->new_tree_node<Arithmetic>(@$, ArithmeticOperator::DIV, $1, $3);
     }
   | '~' Expression {
-      $$ = context.new_tree_node<Complement>($2);
+      $$ = program->new_tree_node<Complement>(@$, $2);
     }
   | Expression '<' Expression {
-      $$ = context.new_tree_node<Comparison>(ComparisonOperator::LT, $1, $3);
+      $$ = program->new_tree_node<Comparison>(@$, ComparisonOperator::LT, $1, $3);
     }
   | Expression "<=" Expression {
-      $$ = context.new_tree_node<Comparison>(ComparisonOperator::LE, $1, $3);
+      $$ = program->new_tree_node<Comparison>(@$, ComparisonOperator::LE, $1, $3);
     }
   | Expression '=' Expression {
-      $$ = context.new_tree_node<Comparison>(ComparisonOperator::EQ, $1, $3);
+      $$ = program->new_tree_node<Comparison>(@$, ComparisonOperator::EQ, $1, $3);
     }
   | NOT Expression {
-      $$ = context.new_tree_node<Not>($2);
+      $$ = program->new_tree_node<Not>(@$, $2);
     }
   | '(' Expression ')' {
       $$ = $2;
     }
   | OBJECTID {
-      $$ = context.new_tree_node<Object>($1);
+      $$ = program->new_tree_node<Object>(@$, $1);
     }
   | NUMBER {
-      $$ = context.new_tree_node<Integer>($1);
+      $$ = program->new_tree_node<Integer>(@$, $1);
     }
   | STRING {
-      $$ = context.new_tree_node<String>($1);
+      $$ = program->new_tree_node<String>(@$, $1);
     }
   | TRUE {
-      $$ = context.new_tree_node<Boolean>(true);
+      $$ = program->new_tree_node<Boolean>(@$, true);
     }
   | FALSE {
-      $$ = context.new_tree_node<Boolean>(false);
+      $$ = program->new_tree_node<Boolean>(@$, false);
     }
   ;
 
@@ -287,10 +307,10 @@ Definitions:
 
 Definition:
     OBJECTID ':' TYPEID {
-      $$ = context.new_tree_node<Definition>($1, $3);
+      $$ = program->new_tree_node<Definition>(@$, $1, $3);
     }
   | OBJECTID ':' TYPEID "<-" Expression {
-      $$ = context.new_tree_node<Definition>($1, $3, $5);
+      $$ = program->new_tree_node<Definition>(@$, $1, $3, $5);
     }
   ;
 
@@ -307,12 +327,48 @@ Branches:
 
 Branch:
     OBJECTID ':' TYPEID "=>" Expression ';' {
-      $$ = context.new_tree_node<Branch>($1, $3, $5);
+      $$ = program->new_tree_node<Branch>(@$, $1, $3, $5);
     }
   ;
 
 %%
 
-void yy::parser::error(const std::string &msg) {
-  std::cerr << msg << std::endl;
+void yy::parser::error(const location_type &loc, const std::string &msg) {
+  std::cerr << program->getName() << ":" << loc << ": " << msg << std::endl;
+}
+
+void yy::parser::report_syntax_error(const context &yyctx) const {
+  const value_type &yylval = yyctx.lookahead().value;
+
+  std::cerr << program->getName()
+            << ":"
+            << yyctx.location()
+            << ": syntax error at or near "
+            << yyctx.lookahead().name();
+
+  switch (yyctx.token()) {
+    case symbol_kind_type::S_TRUE:
+      std::cerr << " = true";
+      break;
+    case symbol_kind_type::S_FALSE:
+      std::cerr << " = false";
+      break;
+    case symbol_kind_type::S_NUMBER:
+      std::cerr << " = " << yylval.as<long>();
+      break;
+    case symbol_kind_type::S_STRING:
+      std::cerr << " = \"";
+      print_escaped_string(std::cerr, yylval.as<std::string>().c_str());
+      std::cerr << "\"";
+      break;
+    case symbol_kind_type::S_OBJECTID:
+    case symbol_kind_type::S_TYPEID:
+      std::cerr << " = " << yylval.as<Symbol *>()->to_string();
+      break;
+    case symbol_kind_type::S_ERROR:
+      std::cerr << " \"" << yylval.as<const char *>() << "\"";
+      break;
+  }
+
+  std::cerr << std::endl;
 }
