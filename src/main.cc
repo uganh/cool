@@ -34,10 +34,9 @@ int main(int argc, char *argv[]) {
 
     if (yy::parser(lexer, context).parse() != 0) {
       std::cerr << "Compilation halted due to lex or parse errors" << std::endl;
-      std::cerr << "At line " << lexer.line_number() << std::endl;
       return -1;
     }
-#endif    
+#endif
   }
 
   return 0;
