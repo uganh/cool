@@ -17,6 +17,10 @@
 #include "cool-tree.h"
 #include "strtab.h"
 
+#if defined(_MSC_VER)
+# pragma warning(disable: 4065)
+#endif
+
 class LexState;
 }
 
@@ -127,7 +131,7 @@ Classes:
 
 Class:
     CLASS TYPEID '{' Features '}' ';' {
-      $$ = program->new_tree_node<Class>(@$, $2, nullptr, std::move($4));
+      $$ = program->new_tree_node<Class>(@$, $2, Symbol::Object, std::move($4));
     }
   | CLASS TYPEID INHERITS TYPEID '{' Features '}' ';' {
       $$ = program->new_tree_node<Class>(@$, $2, $4, std::move($6));

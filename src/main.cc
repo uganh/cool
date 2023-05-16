@@ -1,12 +1,16 @@
 #include "cool-lex.h"
+#include "cool-semant.h"
 #include "utilities.h"
 
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <vector>
 
 int main(int argc, char *argv[]) {
   int opt_index = 1;
+
+  std::vector<Program *> programs;
 
   while (opt_index < argc) {
     const char *filename = argv[opt_index++];
@@ -31,15 +35,25 @@ int main(int argc, char *argv[]) {
       dump_token(std::cout, yylloc, token, &yylval);
     }
 #else
-    std::unique_ptr<Program> program = std::make_unique<Program>(filename);
+    Program *program = new Program(filename);
+    programs.push_back(program);
 
-    if (yy::parser(lexer, program.get()).parse() != 0) {
+    if (yy::parser(lexer, program).parse() != 0) {
       std::cerr << "Compilation halted due to lex or parse errors" << std::endl;
-      return -1;
+    } else {
+      program->dump(std::cout);
     }
-
-    program->dump(std::cout);
 #endif
+  }
+
+  InheritanceTree inheritanceTree;
+
+  if (!semant(inheritanceTree, programs)) {
+    std::cerr << "Compilation halted due to static semantic errors." << std::endl;
+  }
+
+  for (Program *program : programs) {
+    delete program;
   }
 
   return 0;
