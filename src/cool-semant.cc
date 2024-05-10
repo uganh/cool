@@ -729,7 +729,8 @@ void Attribute::install(InheritanceTree &inheritanceTree, const Program *program
                   << std::endl;
       }
     } else {
-      inheritanceTree.installAttribute(currentType, name, type);
+      bool ok = inheritanceTree.installAttribute(currentType, name, type, init);
+      assert(ok);
     }
   } else {
     // TODO: "Class {type} of attribute {name} is undefined."
@@ -956,7 +957,8 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
 
   /* 3. Install method to the environment */
 
-  assert(inheritanceTree.installMethod(currentType, name, type, params));
+  bool ok = inheritanceTree.installMethod(currentType, name, type, params, expr);
+  assert(ok);
 }
 
 void Method::doCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
@@ -1007,7 +1009,8 @@ void Method::doCheck(InheritanceTree &inheritanceTree, const Program *program, S
 }
 
 void Class::install(InheritanceTree &inheritanceTree) const {
-  assert(inheritanceTree.installClass(name, base));
+  bool ok = inheritanceTree.installClass(name, base);
+  assert(ok);
 }
 
 void Class::doCheck(InheritanceTree &inheritanceTree, const Program *program) const {
@@ -1191,4 +1194,3 @@ bool semant(InheritanceTree &inheritanceTree, const std::vector<Program *> &prog
 
   return true;
 }
-

@@ -5,26 +5,39 @@
 #include <unordered_map>
 #include <vector>
 
+class Expression;
+
+struct AttributeInfo {
+  Symbol *typeName;
+  Symbol *attrType;
+  Expression *init;
+  unsigned int wordOffset;
+};
+
 struct MethodInfo {
   Symbol *typeName;
   struct MethodType {
     Symbol *retType;
     std::vector<std::pair<Symbol *, Symbol *>> paramDecls;
   } methType;
+  Expression *expr;
+  unsigned int index;
 };
 
-struct AttributeInfo {
+struct ClassInfo {
   Symbol *typeName;
-  Symbol *attrType;
+  unsigned int index;
+  unsigned int wordSize;
+  std::vector<MethodInfo *> dispatchTable;
+  std::unordered_map<Symbol *, MethodInfo> methods;
+  std::unordered_map<Symbol *, AttributeInfo> attributes;
 };
 
 class InheritanceTree {
   struct Node {
-    Symbol *name;
     unsigned int base_index;
     unsigned int depth;
-    std::unordered_map<Symbol *, MethodInfo> meths;
-    std::unordered_map<Symbol *, AttributeInfo> attrs;
+    ClassInfo classInfo;
   };
 
   std::vector<Node> nodes;
@@ -55,9 +68,11 @@ public:
 
   const MethodInfo *getMethodInfo(Symbol *typeName, Symbol *methName) const;
 
+  const ClassInfo *getClassInfo(Symbol *typeName) const;
+
   bool installClass(Symbol *name, Symbol *baseName);
 
-  bool installAttribute(Symbol *typeName, Symbol *attrName, Symbol *attrType);
+  bool installAttribute(Symbol *typeName, Symbol *attrName, Symbol *attrType, Expression *init);
 
-  bool installMethod(Symbol *typeName, Symbol *methName, Symbol *retType, const std::vector<std::pair<Symbol *, Symbol *>> &paramDecls);
+  bool installMethod(Symbol *typeName, Symbol *methName, Symbol *retType, const std::vector<std::pair<Symbol *, Symbol *>> &paramDecls, Expression *expr);
 };

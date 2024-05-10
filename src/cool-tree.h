@@ -461,7 +461,7 @@ public:
     return name;
   }
 
-  const std::vector<Class *> getClasses(void) const {
+  const std::vector<Class *> &getClasses(void) const {
     return classes;
   }
 

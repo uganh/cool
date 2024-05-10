@@ -5,7 +5,7 @@
 #define yyleng static_cast<size_t>(YYCURSOR - yytext)
 
 int LexState::lex(yy::parser::value_type *yylval_ptr, yy::parser::location_type *yylloc_ptr) {
-  const char *yytext, *YYMARKER;
+  const char *yytext;
 
 loop:
   yytext = YYCURSOR;

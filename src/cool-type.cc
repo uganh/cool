@@ -12,15 +12,32 @@ InheritanceTree::InheritanceTree(void) {
   dict.insert({ Symbol::Object, 0 });
   nodes.push_back(
     {
-      Symbol::Object,
-      INVALID_INDEX,
-      0,
-      {
-        { Symbol::Object, { strtab.new_string("abort"), { Symbol::Object, {} } } },
-        { Symbol::Object, { strtab.new_string("type_name"), { Symbol::String, {} } } },
-        { Symbol::Object, { strtab.new_string("copy"), { Symbol::SELF_TYPE, {} } } },
+      INVALID_INDEX,    // base_index
+      0,                // depth
+      {                 // classInfo
+        Symbol::Object, // typeName
+        0,              // index
+        0,              // wordSize
       }
     });
+  installMethod(
+    Symbol::Object,
+    strtab.new_string("abort"),
+    Symbol::Object,
+    {},
+    nullptr);
+  installMethod(
+    Symbol::Object,
+    strtab.new_string("type_name"),
+    Symbol::String,
+    {},
+    nullptr);
+  installMethod(
+    Symbol::Object,
+    strtab.new_string("copy"),
+    Symbol::SELF_TYPE,
+    {},
+    nullptr);
 
   // IO:
   //  - out_string(x : String) : SELF_TYPE
@@ -30,24 +47,54 @@ InheritanceTree::InheritanceTree(void) {
   dict.insert({ Symbol::IO, 1 });
   nodes.push_back(
     {
-      Symbol::IO,
-      0,
-      1,
-      {
-        { Symbol::IO, { strtab.new_string("out_string"), { Symbol::SELF_TYPE, { { strtab.new_string("x"), Symbol::String } } } } },
-        { Symbol::IO, { strtab.new_string("out_int"), { Symbol::SELF_TYPE, { { strtab.new_string("x"), Symbol::Int } } } } },
-        { Symbol::IO, { strtab.new_string("in_string"), { Symbol::String, {} } } },
-        { Symbol::IO, { strtab.new_string("in_int"), { Symbol::Int, {} } } },
+      0,            // base_index
+      1,            // depth
+      {             // classInfo
+        Symbol::IO, // typeName
+        1,          // index
+        0,          // wordSize
       }
     });
+  installMethod(
+    Symbol::IO,
+    strtab.new_string("out_string"),
+    Symbol::SELF_TYPE,
+    {
+      { strtab.new_string("x"), Symbol::String }
+    },
+    nullptr);
+  installMethod(
+    Symbol::IO,
+    strtab.new_string("out_int"),
+    Symbol::SELF_TYPE,
+    {
+      { strtab.new_string("x"), Symbol::Int }
+    },
+    nullptr);
+  installMethod(
+    Symbol::IO,
+    strtab.new_string("in_string"),
+    Symbol::String,
+    {},
+    nullptr);
+  installMethod(
+    Symbol::IO,
+    strtab.new_string("in_int"),
+    Symbol::Int,
+    {},
+    nullptr);
 
   // Int:
   dict.insert({ Symbol::Int, 2 });
   nodes.push_back(
     {
-      Symbol::Int,
-      0,
-      1
+      0,             // base_index
+      1,             // depth
+      {              // classInfo
+        Symbol::Int, // typeName
+        2,           // index
+        1,           // wordSize
+      }
     });
 
   // String:
@@ -57,23 +104,49 @@ InheritanceTree::InheritanceTree(void) {
   dict.insert({ Symbol::String, 3 });
   nodes.push_back(
     {
-      Symbol::String,
-      0,
-      1,
-      {
-        { Symbol::String, { strtab.new_string("length"), { Symbol::Int, {} } } },
-        { Symbol::String, { strtab.new_string("concat"), { Symbol::String, { { strtab.new_string("s"), Symbol::String } } } } },
-        { Symbol::String, { strtab.new_string("substr"), { Symbol::String, { { strtab.new_string("i"), Symbol::Int }, { strtab.new_string("l"), Symbol::Int } } } } },
+      0,                // base_index
+      1,                // depth
+      {                 // classInfo
+        Symbol::String, // typeName
+        3,              // index
+        0,              // wordSize
       }
     });
+  installMethod(
+    Symbol::String,
+    strtab.new_string("length"),
+    Symbol::Int,
+    {},
+    nullptr);
+  installMethod(
+    Symbol::String,
+    strtab.new_string("concat"),
+    Symbol::String,
+    {
+      { strtab.new_string("s"), Symbol::String }
+    },
+    nullptr);
+  installMethod(
+    Symbol::String,
+    strtab.new_string("substr"),
+    Symbol::String,
+    {
+      { strtab.new_string("i"), Symbol::Int },
+      { strtab.new_string("l"), Symbol::Int }
+    },
+    nullptr);
 
   // Bool:
   dict.insert({ Symbol::Bool, 4 });
   nodes.push_back(
     {
-      Symbol::Bool,
-      0,
-      1
+      0,              // base_index
+      1,              // depth
+      {               // classInfo
+        Symbol::Bool, // typeName
+        4,            // index
+        0,            // wordSize
+      }
     });
 }
 
@@ -86,7 +159,6 @@ bool InheritanceTree::isInheritable(Symbol *typeName) const {
   }
   return true;
 }
-
 
 bool InheritanceTree::isConform(Symbol *C, Symbol *T1, Symbol *T2) const {
   /**
@@ -130,7 +202,7 @@ bool InheritanceTree::isConform(Symbol *C, Symbol *T1, Symbol *T2) const {
     T1Node = &nodes[T1Node->base_index];
   }
 
-  return T1Node->name == T2;
+  return T1Node->classInfo.typeName == T2;
 }
 
 Symbol *InheritanceTree::lub(Symbol *C, Symbol *T1, Symbol *T2) const {
@@ -167,7 +239,7 @@ Symbol *InheritanceTree::lub(Symbol *C, Symbol *T1, Symbol *T2) const {
     T2Node = &nodes[T2Node->base_index];
   }
 
-  return T1Node->name;
+  return T1Node->classInfo.typeName;
 }
 
 const AttributeInfo *InheritanceTree::getAttributeInfo(Symbol *typeName, Symbol *attrName) const {
@@ -176,8 +248,8 @@ const AttributeInfo *InheritanceTree::getAttributeInfo(Symbol *typeName, Symbol 
     unsigned int type_index = iter->second;
     while (type_index != -1) {
       const Node &node = nodes[type_index];
-      auto iter = node.attrs.find(attrName);
-      if (iter != node.attrs.cend()) {
+      auto iter = node.classInfo.attributes.find(attrName);
+      if (iter != node.classInfo.attributes.cend()) {
         return &iter->second;
       }
       type_index = node.base_index;
@@ -192,12 +264,20 @@ const MethodInfo *InheritanceTree::getMethodInfo(Symbol *typeName, Symbol *methN
     unsigned int type_index = iter->second;
     while (type_index != -1) {
       const Node &node = nodes[type_index];
-      auto iter = node.meths.find(methName);
-      if (iter != node.meths.cend()) {
+      auto iter = node.classInfo.methods.find(methName);
+      if (iter != node.classInfo.methods.cend()) {
         return &iter->second;
       }
       type_index = node.base_index;
     }
+  }
+  return nullptr;
+}
+
+const ClassInfo *InheritanceTree::getClassInfo(Symbol *typeName) const {
+  auto iter = dict.find(typeName);
+  if (iter != dict.cend()) {
+    return &nodes[iter->second].classInfo;
   }
   return nullptr;
 }
@@ -207,37 +287,76 @@ bool InheritanceTree::installClass(Symbol *name, Symbol *baseName) {
     return false;
   }
 
+  unsigned int index = nodes.size();
+  unsigned int depth = 0;
+  unsigned int base_index = INVALID_INDEX;
+
   auto iter = dict.find(baseName);
-  if (iter == dict.cend()) {
-    return false;
+  if (iter != dict.cend()) {
+    base_index = iter->second;
+    depth = nodes[base_index].depth + 1;
   }
 
-  unsigned int base_index = iter->second;
+  dict.insert({ name, index });
+  nodes.push_back({ base_index, depth, { name, index } });
 
-  dict.insert({ name, nodes.size() });
-  nodes.push_back({ name, base_index, nodes[base_index].depth + 1 });
+  if (base_index != INVALID_INDEX) {
+    ClassInfo &classInfo = nodes.back().classInfo;
+    ClassInfo &baseClassInfo = nodes[base_index].classInfo;
+    classInfo.wordSize = baseClassInfo.wordSize;
+    classInfo.dispatchTable = baseClassInfo.dispatchTable;
+  }
 
   return true;
 }
 
-bool InheritanceTree::installAttribute(Symbol *typeName, Symbol *attrName, Symbol *attrType) {
+bool InheritanceTree::installAttribute(Symbol *typeName, Symbol *attrName, Symbol *attrType, Expression *init) {
   auto iter = dict.find(typeName);
   if (iter == dict.cend()) {
     return false;
   }
-  return nodes[iter->second].attrs.insert({ attrName, { typeName, attrType } }).second;
+
+  ClassInfo &classInfo = nodes[iter->second].classInfo;
+
+  if (classInfo.attributes.insert({ attrName, { typeName, attrType, init, classInfo.wordSize } }).second) {
+    classInfo.wordSize++;
+    return true;
+  }
+
+  return false;
 }
 
-bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *retType, const std::vector<std::pair<Symbol *, Symbol *>> &paramDecls) {
+bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *retType, const std::vector<std::pair<Symbol *, Symbol *>> &paramDecls, Expression *expr) {
   auto iter = dict.find(typeName);
   if (iter == dict.cend()) {
     return false;
   }
-  return nodes[iter->second].meths.insert({
-    methName, {
-      typeName, {
-        retType, paramDecls
-      }
+
+  ClassInfo &classInfo = nodes[iter->second].classInfo;
+
+  unsigned int index = INVALID_INDEX;
+  if (const MethodInfo *methInfo = getMethodInfo(typeName, methName)) {
+    index = methInfo->index;
+  }
+
+  auto insertion = classInfo.methods.insert({
+    methName,
+    {
+      typeName,
+      { retType, paramDecls },
+      expr,
+      index
+    },
+  });
+
+  if (insertion.second) {
+    if (index != INVALID_INDEX) {
+      classInfo.dispatchTable[index] = &insertion.first->second;
+    } else {
+      classInfo.dispatchTable.push_back(&insertion.first->second);
     }
-  }).second;
+    return true;
+  }
+
+  return false;
 }
