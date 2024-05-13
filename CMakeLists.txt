@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.15)
 
 project(cool LANGUAGES CXX)
 
@@ -28,11 +28,12 @@ BISON_TARGET(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-parse.yy
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-parse.gen.cc
   DEFINES_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-parse.gen.h
-  VERBOSE ${CMAKE_CURRENT_SOURCE_DIR}/cool-parse.output
 )
 
 add_executable(
   coolc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-cgen.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-cgen.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-lex.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-semant.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/src/cool-semant.h

@@ -1,3 +1,4 @@
+#include "cool-cgen.h"
 #include "cool-lex.h"
 #include "cool-semant.h"
 #include "utilities.h"
@@ -40,9 +41,10 @@ int main(int argc, char *argv[]) {
 
     if (yy::parser(lexer, program).parse() != 0) {
       std::cerr << "Compilation halted due to lex or parse errors" << std::endl;
-    } else {
-      program->dump(std::cout);
+      return -1;
     }
+
+    program->dump(std::cout);
 #endif
   }
 
@@ -50,7 +52,13 @@ int main(int argc, char *argv[]) {
 
   if (!semant(inheritanceTree, programs)) {
     std::cerr << "Compilation halted due to static semantic errors." << std::endl;
+    return -1;
   }
+
+  std::cout << std::endl;
+
+  CGenContext context(std::cout);
+  context.cgen(inheritanceTree, programs);
 
   for (Program *program : programs) {
     delete program;
