@@ -12,7 +12,7 @@ class Symtab {
     /* The last hidden definition */
     unsigned int outer;
     Symbol *name;
-    DataType *info;
+    DataType info;
   };
 
   unsigned int depth;
@@ -49,7 +49,7 @@ public:
     --depth;
   }
 
-  bool define(Symbol *name, DataType *info, bool probe = false) {
+  bool define(Symbol *name, DataType info, bool probe = false) {
     unsigned int outer = -1;
 
     auto iter = dict.find(name);
@@ -67,12 +67,17 @@ public:
     return true;
   }
 
-  DataType *lookup(Symbol *name) const {
+  bool lookup(Symbol *name, DataType &out_info) const {
     auto iter = dict.find(name);
     if (iter != dict.cend()) {
-      return entries[iter->second].info;
+      out_info = entries[iter->second].info;
+      return true;
     }
-    return nullptr;
+    return false;
+  }
+
+  size_t size(void) const {
+    return entries.size();
   }
 };
 

@@ -7,26 +7,51 @@
 #include <string>
 #include <vector>
 
-using ScopedSymtab = Symtab<Symbol>;
-
-using ScopedSymtabGuard = SymtabGuard<Symbol>;
-
+class CGenContext;
+class Environment;
 class Program;
+class ScopeContext;
 
 class TreeNode {
 public:
   virtual ~TreeNode(void) = default;
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const = 0;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const = 0;
 };
 
 class Expression : public TreeNode {
+  mutable Symbol *staticType = nullptr;
+
 public:
-  virtual Symbol *typeCheck(
+  Symbol *typeCheck(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const = 0;
+    ScopeContext &context) const {
+    staticType = typeCheckImpl(inheritanceTree, program, currentType, context);
+    return staticType;
+  }
+
+  Symbol *getStaticType(void) const {
+    return staticType;
+  }
+
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const = 0;
+
+private:
+  virtual Symbol *typeCheckImpl(
+    InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    ScopeContext &context) const = 0;
 };
 
 class Assign : public Expression {
@@ -36,13 +61,24 @@ class Assign : public Expression {
 public:
   Assign(Symbol *left, Expression *expr) : left(left), expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Dispatch : public Expression {
@@ -55,13 +91,24 @@ public:
   Dispatch(Expression *expr, Symbol *name, Symbol *type, std::vector<Expression *> args)
     : expr(expr), name(name), type(type), args(std::move(args)) {}
   
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Conditional : public Expression {
@@ -73,13 +120,24 @@ public:
   Conditional(Expression *pred, Expression *then, Expression *elSe)
     : pred(pred), then(then), elSe(elSe) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Loop : public Expression {
@@ -89,13 +147,24 @@ class Loop : public Expression {
 public:
   Loop(Expression *pred, Expression *body) : pred(pred), body(body) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Block : public Expression {
@@ -104,13 +173,24 @@ class Block : public Expression {
 public:
   explicit Block(std::vector<Expression *> exprs) : exprs(std::move(exprs)) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Definition : public TreeNode {
@@ -122,13 +202,16 @@ public:
   Definition(Symbol *name, Symbol *type, Expression *init = nullptr)
     : name(name), type(type), init(init) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
   void install(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const;
+    ScopeContext &context) const;
 };
 
 class Let : public Expression {
@@ -139,13 +222,24 @@ public:
   Let(std::vector<Definition *> defs, Expression *body)
     : defs(std::move(defs)), body(body) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Branch : public TreeNode {
@@ -157,13 +251,16 @@ public:
   Branch(Symbol *name, Symbol *type, Expression *expr)
     : name(name), type(type), expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
   std::pair<Symbol *, Symbol *> doCheck(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const;
+    ScopeContext &context) const;
 };
 
 class Case : public Expression {
@@ -174,13 +271,24 @@ public:
   Case(Expression *expr, std::vector<Branch *> branches)
     : expr(expr), branches(std::move(branches)) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class New : public Expression {
@@ -189,13 +297,24 @@ class New : public Expression {
 public:
   explicit New(Symbol *type) : type(type) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class IsVoid : public Expression {
@@ -204,13 +323,24 @@ class IsVoid : public Expression {
 public:
   explicit IsVoid(Expression *expr) : expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 enum class ArithmeticOperator { ADD, SUB, MUL, DIV, };
@@ -224,13 +354,24 @@ public:
   Arithmetic(ArithmeticOperator op, Expression *op1, Expression *op2)
     : op(op), op1(op1), op2(op2) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Complement : public Expression {
@@ -239,13 +380,24 @@ class Complement : public Expression {
 public:
   explicit Complement(Expression *expr) : expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 enum class ComparisonOperator { LT, LE, EQ, };
@@ -259,13 +411,24 @@ public:
   Comparison(ComparisonOperator op, Expression *op1, Expression *op2)
     : op(op), op1(op1), op2(op2) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Not : public Expression {
@@ -274,13 +437,24 @@ class Not : public Expression {
 public:
   explicit Not(Expression *expr) : expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Object : public Expression {
@@ -289,28 +463,50 @@ class Object : public Expression {
 public:
   explicit Object(Symbol *name) : name(name) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Integer : public Expression {
-  long value;
+  int value;
 
 public:
-  explicit Integer(long value) : value(value) {}
+  explicit Integer(int value) : value(value) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class String : public Expression {
@@ -319,13 +515,24 @@ class String : public Expression {
 public:
   explicit String(const std::string &value) : value(value) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Boolean : public Expression {
@@ -334,13 +541,24 @@ class Boolean : public Expression {
 public:
   explicit Boolean(bool value) : value(value) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
-  virtual Symbol *typeCheck(
+  virtual void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const override;
+
+private:
+  virtual Symbol *typeCheckImpl(
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    ScopeContext &context) const override;
 };
 
 class Feature : public TreeNode {
@@ -354,7 +572,7 @@ public:
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const = 0;
+    Symtab<Symbol *> &symtab) const = 0;
 };
 
 class Attribute : public Feature {
@@ -366,7 +584,10 @@ public:
   Attribute(Symbol *name, Symbol *type, Expression *init = nullptr)
     : name(name), type(type), init(init) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
   virtual void install(
     InheritanceTree &inheritanceTree,
@@ -377,7 +598,7 @@ public:
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    Symtab<Symbol *> &symtab) const override;
 };
 
 class Formal : public TreeNode {
@@ -395,7 +616,10 @@ public:
     return type;
   }
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 };
 
 class Method : public Feature {
@@ -408,7 +632,10 @@ public:
   Method(Symbol *name, std::vector<Formal *> formals, Symbol *type, Expression *expr)
     : name(name), formals(std::move(formals)), type(type), expr(expr) {}
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
   virtual void install(
     InheritanceTree &inheritanceTree,
@@ -419,7 +646,7 @@ public:
     InheritanceTree &inheritanceTree,
     const Program *program,
     Symbol *currentType,
-    ScopedSymtab &symtab) const override;
+    Symtab<Symbol *> &symtab) const override;
 };
 
 class Class : public TreeNode {
@@ -439,7 +666,10 @@ public:
     return base;
   }
 
-  virtual void dump(std::ostream &stream, std::vector<bool> &indents, const Program *program) const override;
+  virtual void dump(
+    std::ostream &stream,
+    std::vector<bool> &indents,
+    const Program *program) const override;
 
   void install(InheritanceTree &inheritanceTree) const;
 

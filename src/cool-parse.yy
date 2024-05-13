@@ -68,7 +68,7 @@ class LexState;
 %token TRUE
 %token WHILE
 
-%token <long> NUMBER
+%token <int> NUMBER
 %token <std::string> STRING
 
 %token <Symbol *> OBJECTID
@@ -358,7 +358,7 @@ void yy::parser::report_syntax_error(const context &yyctx) const {
       std::cerr << " = false";
       break;
     case symbol_kind_type::S_NUMBER:
-      std::cerr << " = " << yylval.as<long>();
+      std::cerr << " = " << yylval.as<int>();
       break;
     case symbol_kind_type::S_STRING:
       std::cerr << " = \"";

@@ -16,6 +16,7 @@ InheritanceTree::InheritanceTree(void) {
       0,                // depth
       {                 // classInfo
         Symbol::Object, // typeName
+        nullptr,        // base
         0,              // index
         0,              // wordSize
       }
@@ -39,6 +40,8 @@ InheritanceTree::InheritanceTree(void) {
     {},
     nullptr);
 
+  ClassInfo *root = &nodes[0].classInfo;
+
   // IO:
   //  - out_string(x : String) : SELF_TYPE
   //  - out_int(x : Int) : SELF_TYPE
@@ -51,6 +54,7 @@ InheritanceTree::InheritanceTree(void) {
       1,            // depth
       {             // classInfo
         Symbol::IO, // typeName
+        root,       // base
         1,          // index
         0,          // wordSize
       }
@@ -92,6 +96,7 @@ InheritanceTree::InheritanceTree(void) {
       1,             // depth
       {              // classInfo
         Symbol::Int, // typeName
+        root,        // base
         2,           // index
         1,           // wordSize
       }
@@ -108,6 +113,7 @@ InheritanceTree::InheritanceTree(void) {
       1,                // depth
       {                 // classInfo
         Symbol::String, // typeName
+        root,           // base
         3,              // index
         0,              // wordSize
       }
@@ -144,6 +150,7 @@ InheritanceTree::InheritanceTree(void) {
       1,              // depth
       {               // classInfo
         Symbol::Bool, // typeName
+        root,         // base
         4,            // index
         0,            // wordSize
       }
@@ -248,8 +255,8 @@ const AttributeInfo *InheritanceTree::getAttributeInfo(Symbol *typeName, Symbol 
     unsigned int type_index = iter->second;
     while (type_index != -1) {
       const Node &node = nodes[type_index];
-      auto iter = node.classInfo.attributes.find(attrName);
-      if (iter != node.classInfo.attributes.cend()) {
+      auto iter = node.attrs.find(attrName);
+      if (iter != node.attrs.cend()) {
         return &iter->second;
       }
       type_index = node.base_index;
@@ -264,8 +271,8 @@ const MethodInfo *InheritanceTree::getMethodInfo(Symbol *typeName, Symbol *methN
     unsigned int type_index = iter->second;
     while (type_index != -1) {
       const Node &node = nodes[type_index];
-      auto iter = node.classInfo.methods.find(methName);
-      if (iter != node.classInfo.methods.cend()) {
+      auto iter = node.meths.find(methName);
+      if (iter != node.meths.cend()) {
         return &iter->second;
       }
       type_index = node.base_index;
@@ -287,25 +294,28 @@ bool InheritanceTree::installClass(Symbol *name, Symbol *baseName) {
     return false;
   }
 
-  unsigned int index = nodes.size();
-  unsigned int depth = 0;
-  unsigned int base_index = INVALID_INDEX;
-
   auto iter = dict.find(baseName);
-  if (iter != dict.cend()) {
-    base_index = iter->second;
-    depth = nodes[base_index].depth + 1;
+  if (iter == dict.cend()) {
+    return false;
   }
+
+  unsigned int index = nodes.size();
+  Node &baseNode = nodes[iter->second];
+  ClassInfo *base = &baseNode.classInfo;
 
   dict.insert({ name, index });
-  nodes.push_back({ base_index, depth, { name, index } });
-
-  if (base_index != INVALID_INDEX) {
-    ClassInfo &classInfo = nodes.back().classInfo;
-    ClassInfo &baseClassInfo = nodes[base_index].classInfo;
-    classInfo.wordSize = baseClassInfo.wordSize;
-    classInfo.dispatchTable = baseClassInfo.dispatchTable;
-  }
+  nodes.push_back(
+    {
+      base->index,
+      baseNode.depth + 1,
+      {
+        name,
+        base,
+        index,
+        base->wordSize,
+        base->dispatchTable,
+      }
+    });
 
   return true;
 }
@@ -316,9 +326,22 @@ bool InheritanceTree::installAttribute(Symbol *typeName, Symbol *attrName, Symbo
     return false;
   }
 
-  ClassInfo &classInfo = nodes[iter->second].classInfo;
+  Node &node = nodes[iter->second];
+  ClassInfo &classInfo = node.classInfo;
 
-  if (classInfo.attributes.insert({ attrName, { typeName, attrType, init, classInfo.wordSize } }).second) {
+  auto insertion = node.attrs.insert(
+    {
+      attrName,
+      {
+        typeName,
+        attrType,
+        init,
+        classInfo.wordSize
+      }
+    });
+
+  if (insertion.second) {
+    classInfo.attributes.push_back(&insertion.first->second);
     classInfo.wordSize++;
     return true;
   }
@@ -332,14 +355,13 @@ bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *
     return false;
   }
 
-  ClassInfo &classInfo = nodes[iter->second].classInfo;
+  Node &node = nodes[iter->second];
+  ClassInfo &classInfo = node.classInfo;
 
-  unsigned int index = INVALID_INDEX;
-  if (const MethodInfo *methInfo = getMethodInfo(typeName, methName)) {
-    index = methInfo->index;
-  }
+  const MethodInfo *baseMethodInfo = getMethodInfo(typeName, methName);
+  unsigned int index = baseMethodInfo ? baseMethodInfo->index : classInfo.dispatchTable.size();
 
-  auto insertion = classInfo.methods.insert({
+  auto insertion = node.meths.insert({
     methName,
     {
       typeName,
@@ -350,10 +372,11 @@ bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *
   });
 
   if (insertion.second) {
-    if (index != INVALID_INDEX) {
-      classInfo.dispatchTable[index] = &insertion.first->second;
+    MethodInfo *methodInfo = &insertion.first->second;
+    if (baseMethodInfo) {
+      classInfo.dispatchTable[index] = methodInfo;
     } else {
-      classInfo.dispatchTable.push_back(&insertion.first->second);
+      classInfo.dispatchTable.push_back(methodInfo);
     }
     return true;
   }

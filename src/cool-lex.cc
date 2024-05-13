@@ -181,7 +181,7 @@ loop:
   }
 
   digit+ {
-    yylval_ptr->emplace<long>(std::strtol(yytext, NULL, 10));
+    yylval_ptr->emplace<int>(std::strtol(yytext, NULL, 10));
     return TOKID(NUMBER);
   }
 

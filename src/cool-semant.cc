@@ -6,6 +6,56 @@
 #include <iostream>
 #include <unordered_set>
 
+class ScopeContext {
+  std::vector<unsigned int> scopes;
+  unsigned int locals;
+  unsigned int maxLocals;
+  Symtab<Symbol *> &symtab;
+
+public:
+  ScopeContext(Symtab<Symbol *> &symtab) : locals(0), maxLocals(0), symtab(symtab) {}
+
+  void enterScope(unsigned int n) {
+    symtab.enterScope();
+    scopes.push_back(n);
+    locals += n;
+    if (locals > maxLocals) {
+      maxLocals = locals;
+    }
+  }
+
+  void leaveScope(void) {
+    locals -= scopes.back();
+    scopes.pop_back();
+    symtab.leaveScope();
+  }
+
+  bool define(Symbol *name, Symbol *type, bool probe = false) {
+    return symtab.define(name, type, probe);
+  }
+
+  bool lookup(Symbol *name, Symbol *&out_info) const {
+    return symtab.lookup(name, out_info);
+  }
+
+  unsigned int getMaxLocals(void) const {
+    return maxLocals;
+  }
+};
+
+class ScopeContextGuard {
+  ScopeContext &context;
+
+public:
+  ScopeContextGuard(ScopeContext &context, unsigned int n) : context(context) {
+    context.enterScope(n);
+  }
+
+  ~ScopeContextGuard(void) noexcept {
+    context.leaveScope();
+  }
+};
+
 /**
  * The general form a type checking rule is:
  *
@@ -20,8 +70,12 @@
  * are satisfied, then the statement below the bar is true.
  */
 
-Symbol *Assign::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Assign::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O(id) = T
@@ -43,10 +97,10 @@ Symbol *Assign::typeCheck(InheritanceTree &inheritanceTree, const Program *progr
   }
 
   Symbol *leftType = nullptr;
-  if (Symbol *type = symtab.lookup(left)) {
-    leftType = type;
-  } else if (const AttributeInfo *attrInfo = inheritanceTree.getAttributeInfo(currentType, left)) {
-    leftType = attrInfo->attrType;
+  if (!context.lookup(left, leftType)) {
+    if (const AttributeInfo *attrInfo = inheritanceTree.getAttributeInfo(currentType, left)) {
+      leftType = attrInfo->attrType;
+    }
   }
 
   if (leftType == nullptr) {
@@ -82,17 +136,21 @@ Symbol *Assign::typeCheck(InheritanceTree &inheritanceTree, const Program *progr
   return exprType;
 }
 
-Symbol *Dispatch::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *Dispatch::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   Symbol *exprType = nullptr;
   if (expr) {
-    exprType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+    exprType = expr->typeCheck(inheritanceTree, program, currentType, context);
   } else {
     exprType = Symbol::SELF_TYPE;
   }
 
   std::vector<Symbol *> argTypes;
   for (Expression *arg : args) {
-    argTypes.push_back(arg->typeCheck(inheritanceTree, program, currentType, symtab));
+    argTypes.push_back(arg->typeCheck(inheritanceTree, program, currentType, context));
   }
 
   Symbol *dispatchType = nullptr;
@@ -227,10 +285,14 @@ Symbol *Dispatch::typeCheck(InheritanceTree &inheritanceTree, const Program *pro
   return Symbol::Object;
 }
 
-Symbol *Conditional::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *predType = pred->typeCheck(inheritanceTree, program, currentType, symtab);
-  Symbol *thenType = then->typeCheck(inheritanceTree, program, currentType, symtab);
-  Symbol *elseType = elSe->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Conditional::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *predType = pred->typeCheck(inheritanceTree, program, currentType, context);
+  Symbol *thenType = then->typeCheck(inheritanceTree, program, currentType, context);
+  Symbol *elseType = elSe->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O,M,C |- e1 : Bool
@@ -254,9 +316,13 @@ Symbol *Conditional::typeCheck(InheritanceTree &inheritanceTree, const Program *
   return inheritanceTree.lub(currentType, thenType, elseType);
 }
 
-Symbol *Loop::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *predType = pred->typeCheck(inheritanceTree, program, currentType, symtab);
-  Symbol *bodyType = body->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Loop::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *predType = pred->typeCheck(inheritanceTree, program, currentType, context);
+  Symbol *bodyType = body->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O,M,C |- e1 : Bool
@@ -277,7 +343,11 @@ Symbol *Loop::typeCheck(InheritanceTree &inheritanceTree, const Program *program
   return Symbol::Object;
 }
 
-Symbol *Block::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *Block::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * O,M,C |- e1 : T1
    * ...
@@ -289,16 +359,20 @@ Symbol *Block::typeCheck(InheritanceTree &inheritanceTree, const Program *progra
   Symbol *lastType = nullptr;
   
   for (Expression *expr : exprs) {
-    lastType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+    lastType = expr->typeCheck(inheritanceTree, program, currentType, context);
   }
 
   return lastType;
 }
 
-void Definition::install(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {  
+void Definition::install(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   Symbol *initType = nullptr;
   if (init) {
-    initType = init->typeCheck(inheritanceTree, program, currentType, symtab);
+    initType = init->typeCheck(inheritanceTree, program, currentType, context);
   }
 
   if (name == Symbol::SELF_TYPE) {
@@ -324,7 +398,8 @@ void Definition::install(InheritanceTree &inheritanceTree, const Program *progra
               << " is undefined."
               << std::endl;
 
-    assert(symtab.define(name, Symbol::Object));
+    bool ok = context.define(name, Symbol::Object);
+    assert(ok);
   } else {
     if (init && !inheritanceTree.isConform(currentType, initType, type)) {
       // TODO: "Inferred type {initType} of initialization of {name} does not conform to identifier's declared type {type}."
@@ -341,12 +416,17 @@ void Definition::install(InheritanceTree &inheritanceTree, const Program *progra
                 << std::endl;
     }
 
-    assert(symtab.define(name, type));
+    bool ok = context.define(name, type);
+    assert(ok);
   }
 }
 
-Symbol *Let::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  ScopedSymtabGuard scopeGuard(symtab);
+Symbol *Let::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  ScopeContextGuard scg(context, static_cast<unsigned int>(defs.size()));
 
   /**
    * O[T0/x],M,C |- e2 : T2
@@ -361,14 +441,18 @@ Symbol *Let::typeCheck(InheritanceTree &inheritanceTree, const Program *program,
    */
 
   for (Definition *def : defs) {
-    def->install(inheritanceTree, program, currentType, symtab);
+    def->install(inheritanceTree, program, currentType, context);
   }
 
-  return body->typeCheck(inheritanceTree, program, currentType, symtab);
+  return body->typeCheck(inheritanceTree, program, currentType, context);
 }
 
-std::pair<Symbol *, Symbol *> Branch::doCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  ScopedSymtabGuard scopeGuard(symtab);
+std::pair<Symbol *, Symbol *> Branch::doCheck(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  ScopeContextGuard scg(context, 1);
 
   Symbol *declType = nullptr;
 
@@ -390,7 +474,7 @@ std::pair<Symbol *, Symbol *> Branch::doCheck(InheritanceTree &inheritanceTree, 
                 << " declared with type SELF_TYPE in case branch."
                 << std::endl;
 
-      symtab.define(name, Symbol::Object);
+      context.define(name, Symbol::Object);
     } else if (!inheritanceTree.isDefined(type)) {
       // TODO: "Class {type} of case branch is undefined."
       std::cerr << program->getName()
@@ -401,19 +485,23 @@ std::pair<Symbol *, Symbol *> Branch::doCheck(InheritanceTree &inheritanceTree, 
                 << " of case branch is undefined."
                 << std::endl;
 
-      symtab.define(name, Symbol::Object);
+      context.define(name, Symbol::Object);
     } else {
       declType = type;
-      symtab.define(name, type);
+      context.define(name, type);
     }
   }
 
-  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, context);
 
   return { declType, exprType };
 }
 
-Symbol *Case::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *Case::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * O,M,C |- e0 : T0
    * O[T1/x1],M,C |- e1 : T1'
@@ -423,13 +511,13 @@ Symbol *Case::typeCheck(InheritanceTree &inheritanceTree, const Program *program
    * O,M,C |- case e0 of x1 : T1 => e1; ... xn : Tn => en; esac : lub(T1',...,Tn')
    */
 
-  expr->typeCheck(inheritanceTree, program, currentType, symtab);
+  expr->typeCheck(inheritanceTree, program, currentType, context);
 
   Symbol *type = nullptr;
   std::unordered_set<Symbol *> declTypes;
 
   for (Branch *branch : branches) {
-    auto item = branch->doCheck(inheritanceTree, program, currentType, symtab);
+    auto item = branch->doCheck(inheritanceTree, program, currentType, context);
     
     Symbol *declType = item.first;
     Symbol *exprType = item.second;
@@ -455,7 +543,11 @@ Symbol *Case::typeCheck(InheritanceTree &inheritanceTree, const Program *program
   return type;
 }
 
-Symbol *New::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *New::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * -------------------------------------
    * O,M,C |- new SELF_TYPE : SELF_TYPE{C}
@@ -484,8 +576,12 @@ Symbol *New::typeCheck(InheritanceTree &inheritanceTree, const Program *program,
   return Symbol::Object;
 }
 
-Symbol *IsVoid::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  expr->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *IsVoid::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  expr->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O,M,C |- e : T
@@ -495,9 +591,13 @@ Symbol *IsVoid::typeCheck(InheritanceTree &inheritanceTree, const Program *progr
   return Symbol::Bool;
 }
 
-Symbol *Arithmetic::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *op1Type = op1->typeCheck(inheritanceTree, program, currentType, symtab);
-  Symbol *op2Type = op2->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Arithmetic::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *op1Type = op1->typeCheck(inheritanceTree, program, currentType, context);
+  Symbol *op2Type = op2->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O,M,C |- e1 : Int
@@ -535,8 +635,12 @@ Symbol *Arithmetic::typeCheck(InheritanceTree &inheritanceTree, const Program *p
   return Symbol::Int;
 }
 
-Symbol *Complement::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Complement::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O,M,C |- e : Int
@@ -560,9 +664,13 @@ Symbol *Complement::typeCheck(InheritanceTree &inheritanceTree, const Program *p
   return Symbol::Int;
 }
 
-Symbol *Comparison::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *op1Type = op1->typeCheck(inheritanceTree, program, currentType, symtab);
-  Symbol *op2Type = op2->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Comparison::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *op1Type = op1->typeCheck(inheritanceTree, program, currentType, context);
+  Symbol *op2Type = op2->typeCheck(inheritanceTree, program, currentType, context);
 
   if (op == ComparisonOperator::LT || op == ComparisonOperator::LE) {
     /**
@@ -614,8 +722,12 @@ Symbol *Comparison::typeCheck(InheritanceTree &inheritanceTree, const Program *p
   return Symbol::Object;
 }
 
-Symbol *Not::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+Symbol *Not::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
+  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, context);
 
   /**
    * O,M,C |- e : Bool
@@ -640,7 +752,11 @@ Symbol *Not::typeCheck(InheritanceTree &inheritanceTree, const Program *program,
   return Symbol::Bool;
 }
 
-Symbol *Object::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *Object::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * -------------------------
    * O,M,C |- self : SELF_TYPE
@@ -656,7 +772,8 @@ Symbol *Object::typeCheck(InheritanceTree &inheritanceTree, const Program *progr
    */
 
   /* Lexical scope */
-  if (Symbol *type = symtab.lookup(name)) {
+  Symbol *type;
+  if (context.lookup(name, type)) {
     return type;
   }
 
@@ -677,7 +794,11 @@ Symbol *Object::typeCheck(InheritanceTree &inheritanceTree, const Program *progr
   return Symbol::Object;
 }
 
-Symbol *Integer::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *Integer::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * i is an integer constant
    * ------------------------
@@ -686,7 +807,11 @@ Symbol *Integer::typeCheck(InheritanceTree &inheritanceTree, const Program *prog
   return Symbol::Int;
 }
 
-Symbol *String::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *String::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * s is an string constant
    * -----------------------
@@ -695,7 +820,11 @@ Symbol *String::typeCheck(InheritanceTree &inheritanceTree, const Program *progr
   return Symbol::String;
 }
 
-Symbol *Boolean::typeCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+Symbol *Boolean::typeCheckImpl(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  ScopeContext &context) const {
   /**
    * --------------------
    * O,M,C |- true : Bool
@@ -746,7 +875,11 @@ void Attribute::install(InheritanceTree &inheritanceTree, const Program *program
   }
 }
 
-void Attribute::doCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
+void Attribute::doCheck(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  Symtab<Symbol *> &symtab) const {
   if (init) {
     /**
      * O{C}(x) = T0
@@ -756,7 +889,11 @@ void Attribute::doCheck(InheritanceTree &inheritanceTree, const Program *program
      * O{C},M,C |- x : T0 <- e1;
      */
 
-    Symbol *initType = init->typeCheck(inheritanceTree, program, currentType, symtab);
+    ScopeContext context(symtab);
+
+    Symbol *initType = init->typeCheck(inheritanceTree, program, currentType, context);
+
+    inheritanceTree.getAttributeInfo(currentType, name)->locals = context.getMaxLocals();
 
     if (type == Symbol::SELF_TYPE || inheritanceTree.isDefined(type)) {
       if (!inheritanceTree.isConform(currentType, initType, type)) {
@@ -961,8 +1098,12 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
   assert(ok);
 }
 
-void Method::doCheck(InheritanceTree &inheritanceTree, const Program *program, Symbol *currentType, ScopedSymtab &symtab) const {
-  ScopedSymtabGuard sg(symtab);
+void Method::doCheck(
+  InheritanceTree &inheritanceTree,
+  const Program *program,
+  Symbol *currentType,
+  Symtab<Symbol *> &symtab) const {
+  SymtabGuard<Symbol *> sg(symtab);
 
   /**
    * M(C,f) = (T1,...,Tn,Tn+1)
@@ -988,7 +1129,11 @@ void Method::doCheck(InheritanceTree &inheritanceTree, const Program *program, S
     symtab.define(paramName, paramType, true);
   }
 
-  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, symtab);
+  ScopeContext context(symtab);
+
+  Symbol *exprType = expr->typeCheck(inheritanceTree, program, currentType, context);
+
+  inheritanceTree.getMethodInfo(currentType, name)->locals = context.getMaxLocals();
 
   if (type == Symbol::SELF_TYPE || inheritanceTree.isDefined(type)) {
     if (!inheritanceTree.isConform(currentType, exprType, type)) {
@@ -1019,7 +1164,7 @@ void Class::doCheck(InheritanceTree &inheritanceTree, const Program *program) co
     feature->install(inheritanceTree, program, name);
   }
 
-  ScopedSymtab symtab;
+  Symtab<Symbol *> symtab;
 
   for (Feature *feature : features) {
     feature->doCheck(inheritanceTree, program, name, symtab);

@@ -12,6 +12,7 @@ struct AttributeInfo {
   Symbol *attrType;
   Expression *init;
   unsigned int wordOffset;
+  mutable unsigned int locals;
 };
 
 struct MethodInfo {
@@ -22,15 +23,16 @@ struct MethodInfo {
   } methType;
   Expression *expr;
   unsigned int index;
+  mutable unsigned int locals;
 };
 
 struct ClassInfo {
   Symbol *typeName;
+  ClassInfo *base;
   unsigned int index;
   unsigned int wordSize;
   std::vector<MethodInfo *> dispatchTable;
-  std::unordered_map<Symbol *, MethodInfo> methods;
-  std::unordered_map<Symbol *, AttributeInfo> attributes;
+  std::vector<AttributeInfo *> attributes;
 };
 
 class InheritanceTree {
@@ -38,6 +40,8 @@ class InheritanceTree {
     unsigned int base_index;
     unsigned int depth;
     ClassInfo classInfo;
+    std::unordered_map<Symbol *, MethodInfo> meths;
+    std::unordered_map<Symbol *, AttributeInfo> attrs;
   };
 
   std::vector<Node> nodes;
