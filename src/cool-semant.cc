@@ -1229,20 +1229,22 @@ bool semant(InheritanceTree &inheritanceTree, const std::vector<Program *> &prog
         continue;
       }
 
-      if (!inheritanceTree.isInheritable(baseName)) {
-        // TODO: "Class {name} cannot inherit class {baseName}."
-        std::cerr << program->getName()
-                  << ":"
-                  << program->getLine(claSs)
-                  << ": Class "
-                  << name->to_string()
-                  << " cannot inherit class "
-                  << baseName->to_string()
-                  << "."
-                  << std::endl;
+      if (const ClassInfo *baseClassInfo = inheritanceTree.getClassInfo(baseName)) {
+        if (!baseClassInfo->inheritable) {
+          // TODO: "Class {name} cannot inherit class {baseName}."
+          std::cerr << program->getName()
+            << ":"
+            << program->getLine(claSs)
+            << ": Class "
+            << name->to_string()
+            << " cannot inherit class "
+            << baseName->to_string()
+            << "."
+            << std::endl;
 
-        errors++;
-        continue;
+          errors++;
+          continue;
+        }
       }
 
       if (classTable.find(name) != classTable.cend()) {

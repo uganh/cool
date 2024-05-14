@@ -29,20 +29,24 @@ struct MethodInfo {
 struct ClassInfo {
   Symbol *typeName;
   ClassInfo *base;
-  unsigned int index;
+  bool inheritable;
   unsigned int wordSize;
   std::vector<MethodInfo *> dispatchTable;
   std::vector<AttributeInfo *> attributes;
+  unsigned int tag;
+  unsigned int tagEnd;
 };
 
 class InheritanceTree {
   struct Node {
     unsigned int base_index;
     unsigned int depth;
-    ClassInfo classInfo;
-    std::unordered_map<Symbol *, MethodInfo> meths;
-    std::unordered_map<Symbol *, AttributeInfo> attrs;
+    ClassInfo *classInfo;
+    std::unordered_map<Symbol *, MethodInfo *> meths;
+    std::unordered_map<Symbol *, AttributeInfo *> attrs;
   };
+
+  bool fixed;
 
   std::vector<Node> nodes;
   std::unordered_map<Symbol *, unsigned int> dict;
@@ -50,11 +54,11 @@ class InheritanceTree {
 public:
   InheritanceTree(void);
 
+  ~InheritanceTree(void);
+
   bool isDefined(Symbol *typeName) const {
     return dict.find(typeName) != dict.cend();
   }
-
-  bool isInheritable(Symbol * typeName) const;
 
   bool isConform(Symbol *C, Symbol *T1, Symbol *T2) const;
 
@@ -79,4 +83,6 @@ public:
   bool installAttribute(Symbol *typeName, Symbol *attrName, Symbol *attrType, Expression *init);
 
   bool installMethod(Symbol *typeName, Symbol *methName, Symbol *retType, const std::vector<std::pair<Symbol *, Symbol *>> &paramDecls, Expression *expr);
+
+  void fix(void);
 };

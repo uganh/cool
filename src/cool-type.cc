@@ -1,8 +1,10 @@
 #include "cool-type.h"
 
+#include <stack>
+
 #define INVALID_INDEX UINT_MAX
 
-InheritanceTree::InheritanceTree(void) {
+InheritanceTree::InheritanceTree(void) : fixed(false) {
   /* Install basic classes */
 
   // Object:
@@ -14,10 +16,10 @@ InheritanceTree::InheritanceTree(void) {
     {
       INVALID_INDEX,    // base_index
       0,                // depth
-      {                 // classInfo
+      new ClassInfo {
         Symbol::Object, // typeName
         nullptr,        // base
-        0,              // index
+        true,           // inheritable
         0,              // wordSize
       }
     });
@@ -40,7 +42,7 @@ InheritanceTree::InheritanceTree(void) {
     {},
     nullptr);
 
-  ClassInfo *root = &nodes[0].classInfo;
+  ClassInfo *root = nodes[0].classInfo;
 
   // IO:
   //  - out_string(x : String) : SELF_TYPE
@@ -52,11 +54,12 @@ InheritanceTree::InheritanceTree(void) {
     {
       0,            // base_index
       1,            // depth
-      {             // classInfo
+      new ClassInfo {
         Symbol::IO, // typeName
         root,       // base
-        1,          // index
+        true,       // inheritable
         0,          // wordSize
+        root->dispatchTable,
       }
     });
   installMethod(
@@ -94,11 +97,12 @@ InheritanceTree::InheritanceTree(void) {
     {
       0,             // base_index
       1,             // depth
-      {              // classInfo
+      new ClassInfo {
         Symbol::Int, // typeName
         root,        // base
-        2,           // index
+        false,       // inheritable
         1,           // wordSize
+        root->dispatchTable,
       }
     });
 
@@ -111,11 +115,12 @@ InheritanceTree::InheritanceTree(void) {
     {
       0,                // base_index
       1,                // depth
-      {                 // classInfo
+      new ClassInfo {
         Symbol::String, // typeName
         root,           // base
-        3,              // index
+        false,          // inheritable
         0,              // wordSize
+        root->dispatchTable,
       }
     });
   installMethod(
@@ -148,23 +153,28 @@ InheritanceTree::InheritanceTree(void) {
     {
       0,              // base_index
       1,              // depth
-      {               // classInfo
+      new ClassInfo {
         Symbol::Bool, // typeName
         root,         // base
-        4,            // index
+        false,        // inheritable
         0,            // wordSize
+        root->dispatchTable,
       }
     });
 }
 
-bool InheritanceTree::isInheritable(Symbol *typeName) const {
-  auto iter = dict.find(typeName);
-  if (iter != dict.cend()) {
-    if (2 <= iter->second && iter->second <= 4) {
-      return false;
+InheritanceTree::~InheritanceTree(void) {
+  for (Node &node : nodes) {
+    for (auto &item : node.attrs) {
+      delete item.second;
     }
+
+    for (auto &item : node.meths) {
+      delete item.second;
+    }
+
+    delete node.classInfo;
   }
-  return true;
 }
 
 bool InheritanceTree::isConform(Symbol *C, Symbol *T1, Symbol *T2) const {
@@ -209,7 +219,7 @@ bool InheritanceTree::isConform(Symbol *C, Symbol *T1, Symbol *T2) const {
     T1Node = &nodes[T1Node->base_index];
   }
 
-  return T1Node->classInfo.typeName == T2;
+  return T1Node->classInfo->typeName == T2;
 }
 
 Symbol *InheritanceTree::lub(Symbol *C, Symbol *T1, Symbol *T2) const {
@@ -246,7 +256,7 @@ Symbol *InheritanceTree::lub(Symbol *C, Symbol *T1, Symbol *T2) const {
     T2Node = &nodes[T2Node->base_index];
   }
 
-  return T1Node->classInfo.typeName;
+  return T1Node->classInfo->typeName;
 }
 
 const AttributeInfo *InheritanceTree::getAttributeInfo(Symbol *typeName, Symbol *attrName) const {
@@ -257,7 +267,7 @@ const AttributeInfo *InheritanceTree::getAttributeInfo(Symbol *typeName, Symbol 
       const Node &node = nodes[type_index];
       auto iter = node.attrs.find(attrName);
       if (iter != node.attrs.cend()) {
-        return &iter->second;
+        return iter->second;
       }
       type_index = node.base_index;
     }
@@ -273,7 +283,7 @@ const MethodInfo *InheritanceTree::getMethodInfo(Symbol *typeName, Symbol *methN
       const Node &node = nodes[type_index];
       auto iter = node.meths.find(methName);
       if (iter != node.meths.cend()) {
-        return &iter->second;
+        return iter->second;
       }
       type_index = node.base_index;
     }
@@ -284,12 +294,16 @@ const MethodInfo *InheritanceTree::getMethodInfo(Symbol *typeName, Symbol *methN
 const ClassInfo *InheritanceTree::getClassInfo(Symbol *typeName) const {
   auto iter = dict.find(typeName);
   if (iter != dict.cend()) {
-    return &nodes[iter->second].classInfo;
+    return nodes[iter->second].classInfo;
   }
   return nullptr;
 }
 
 bool InheritanceTree::installClass(Symbol *name, Symbol *baseName) {
+  if (fixed) {
+    return false;
+  }
+
   if (dict.find(name) != dict.cend()) {
     return false;
   }
@@ -299,19 +313,21 @@ bool InheritanceTree::installClass(Symbol *name, Symbol *baseName) {
     return false;
   }
 
-  unsigned int index = nodes.size();
-  Node &baseNode = nodes[iter->second];
-  ClassInfo *base = &baseNode.classInfo;
+  unsigned int index = static_cast<unsigned int>(nodes.size());
+  unsigned int base_index = iter->second;
+
+  Node &baseNode = nodes[base_index];
+  ClassInfo *base = baseNode.classInfo;
 
   dict.insert({ name, index });
   nodes.push_back(
     {
-      base->index,
+      base_index,
       baseNode.depth + 1,
-      {
+      new ClassInfo {
         name,
         base,
-        index,
+        true,
         base->wordSize,
         base->dispatchTable,
       }
@@ -327,22 +343,22 @@ bool InheritanceTree::installAttribute(Symbol *typeName, Symbol *attrName, Symbo
   }
 
   Node &node = nodes[iter->second];
-  ClassInfo &classInfo = node.classInfo;
+  ClassInfo *classInfo = node.classInfo;
 
   auto insertion = node.attrs.insert(
     {
       attrName,
-      {
+      new AttributeInfo {
         typeName,
         attrType,
         init,
-        classInfo.wordSize
+        classInfo->wordSize
       }
     });
 
   if (insertion.second) {
-    classInfo.attributes.push_back(&insertion.first->second);
-    classInfo.wordSize++;
+    classInfo->attributes.push_back(insertion.first->second);
+    classInfo->wordSize++;
     return true;
   }
 
@@ -356,14 +372,16 @@ bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *
   }
 
   Node &node = nodes[iter->second];
-  ClassInfo &classInfo = node.classInfo;
+  ClassInfo *classInfo = node.classInfo;
 
   const MethodInfo *baseMethodInfo = getMethodInfo(typeName, methName);
-  unsigned int index = baseMethodInfo ? baseMethodInfo->index : classInfo.dispatchTable.size();
+  unsigned int index = baseMethodInfo ?
+    baseMethodInfo->index :
+    static_cast<unsigned int>(classInfo->dispatchTable.size());
 
   auto insertion = node.meths.insert({
     methName,
-    {
+    new MethodInfo {
       typeName,
       { retType, paramDecls },
       expr,
@@ -372,14 +390,49 @@ bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *
   });
 
   if (insertion.second) {
-    MethodInfo *methodInfo = &insertion.first->second;
+    MethodInfo *methodInfo = insertion.first->second;
     if (baseMethodInfo) {
-      classInfo.dispatchTable[index] = methodInfo;
+      classInfo->dispatchTable[index] = methodInfo;
     } else {
-      classInfo.dispatchTable.push_back(methodInfo);
+      classInfo->dispatchTable.push_back(methodInfo);
     }
     return true;
   }
 
   return false;
+}
+
+void InheritanceTree::fix(void) {
+  std::unordered_map<ClassInfo *, std::vector<ClassInfo *>> graph;
+
+  for (Node &node : nodes) {
+    ClassInfo *classInfo = node.classInfo;
+    ClassInfo *baseClassInfo = classInfo->base;
+    if (baseClassInfo) {
+      graph[baseClassInfo].push_back(classInfo);
+    }
+  }
+
+  unsigned int tag = 0;
+  std::stack<std::pair<ClassInfo *, bool>> stack;
+  stack.push({ nodes[0].classInfo, false} );
+
+  while (!stack.empty()) {
+    auto &item = stack.top();
+    ClassInfo *classInfo = item.first;
+    if (item.second) {
+      classInfo->tagEnd = tag;
+      stack.pop();
+    }
+    else {
+      classInfo->tag = tag++;
+      const std::vector<ClassInfo *> edges = graph[classInfo];
+      for (auto iter = edges.rbegin(), last = edges.rend(); iter != last; iter++) {
+        stack.push({ *iter, false });
+      }
+      item.second = true;
+    }
+  }
+
+  fixed = true;
 }

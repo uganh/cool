@@ -55,6 +55,8 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+  inheritanceTree.fix();
+
   std::cout << std::endl;
 
   CGenContext context(std::cout);

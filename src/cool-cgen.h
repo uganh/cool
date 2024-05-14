@@ -101,7 +101,7 @@ public:
   unsigned int installConstant(int iVal) {
     auto iter = intConstants.find(iVal);
     if (iter == intConstants.cend()) {
-      unsigned int index = static_cast<unsigned int>(strConstants.size());
+      unsigned int index = static_cast<unsigned int>(intConstants.size());
       intConstants.insert({ iVal, index });
       return index;
     }
@@ -122,12 +122,76 @@ public:
    * R-type instructions
    */
 
+  void emit_sll(const std::string &rd, const std::string &rt, unsigned char shamt) {
+    stream << "\tsll\t" << rd << ", " << rt << ", " << (shamt & 0x1f) << std::endl;
+  }
+
+  void emit_srl(const std::string &rd, const std::string &rt, unsigned char shamt) {
+    stream << "\tsrl\t" << rd << ", " << rt << ", " << (shamt & 0x1f) << std::endl;
+  }
+
+  void emit_sra(const std::string &rd, const std::string &rt, unsigned char shamt) {
+    stream << "\tsra\t" << rd << ", " << rt << ", " << (shamt & 0x1f) << std::endl;
+  }
+
+  void emit_sllv(const std::string &rd, const std::string &rt, const std::string &rs) {
+    stream << "\tsllv\t" << rd << ", " << rt << ", " << rs << std::endl;
+  }
+
+  void emit_srlv(const std::string &rd, const std::string &rt, const std::string &rs) {
+    stream << "\tsrlv\t" << rd << ", " << rt << ", " << rs << std::endl;
+  }
+
+  void emit_srav(const std::string &rd, const std::string &rt, const std::string &rs) {
+    stream << "\tsrav\t" << rd << ", " << rt << ", " << rs << std::endl;
+  }
+
   void emit_jr(const std::string &rs) {
     stream << "\tjr\t" << rs << std::endl;
   }
 
+  void emit_jalr(const std::string &rd, const std::string &rs) {
+    stream << "\tjalr\t" << rd << ", " << rs << std::endl;
+  }
+
   void emit_jalr(const std::string &rs) {
     stream << "\tjalr\t" << rs << std::endl;
+  }
+
+  void emit_syscall(void) {
+    stream << "\tsyscall" << std::endl;
+  }
+
+  void emit_mfhi(const std::string &rd) {
+    stream << "\tmfhi\t" << rd << std::endl;
+  }
+
+  void emit_mthi(const std::string &rs) {
+    stream << "\tmthi\t" << rs << std::endl;
+  }
+
+  void emit_mflo(const std::string &rd) {
+    stream << "\tmflo\t" << rd << std::endl;
+  }
+
+  void emit_mtlo(const std::string &rs) {
+    stream << "\tmtlo\t" << rs << std::endl;
+  }
+
+  void emit_mult(const std::string &rs, const std::string &rt) {
+    stream << "\tmult\t" << rs << ", " << rt << std::endl;
+  }
+
+  void emit_multu(const std::string &rs, const std::string &rt) {
+    stream << "\tmultu\t" << rs << ", " << rt << std::endl;
+  }
+
+  void emit_div(const std::string &rs, const std::string &rt) {
+    stream << "\tdiv\t" << rs << ", " << rt << std::endl;
+  }
+
+  void emit_divu(const std::string &rs, const std::string &rt) {
+    stream << "\tdivu\t" << rs << ", " << rt << std::endl;
   }
 
   void emit_add(const std::string &rd, const std::string &rs, const std::string &rt) {
@@ -138,9 +202,49 @@ public:
     stream << "\taddu\t" << rd << ", " << rs << ", " << rt << std::endl;
   }
 
+  void emit_sub(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tsub\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_subu(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tsubu\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_and(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tand\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_or(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tor\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_xor(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\txor\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_nor(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tnor\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_slt(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tslt\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
+  void emit_sltu(const std::string &rd, const std::string &rs, const std::string &rt) {
+    stream << "\tsltu\t" << rd << ", " << rs << ", " << rt << std::endl;
+  }
+
   /**
    * J-type instructions
    */
+
+  void emit_j(const std::string &label) {
+    stream << "\tj\t" << label << std::endl;
+  }
+
+  void emit_j(unsigned int label) {
+    stream << "\tj\t label" << label << std::endl;
+  }
 
   void emit_jal(const std::string &label) {
     stream << "\tjal\t" << label << std::endl;
@@ -158,12 +262,72 @@ public:
     stream << "\tbne\t" << rs << ", " << rt << ", label" << label << std::endl;
   }
 
+  void emit_blez(const std::string &rs, unsigned int label) {
+    stream << "\tblez\t" << rs << ", label" << label << std::endl;
+  }
+
+  void emit_bgtz(const std::string &rs, unsigned int label) {
+    stream << "\tbgtz\t" << rs << ", label" << label << std::endl;
+  }
+
+  void emit_addi(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\taddi\t" << rt << ", " << rs << ", " << imm << std::endl;
+  }
+
   void emit_addiu(const std::string &rt, const std::string &rs, short imm) {
     stream << "\taddiu\t" << rt << ", " << rs << ", " << imm << std::endl;
   }
 
+  void emit_slti(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tslti\t" << rt << ", " << rs << ", " << imm << std::endl;
+  }
+
+  void emit_sltiu(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tsltiu\t" << rt << ", " << rs << ", " << imm << std::endl;
+  }
+
+  void emit_andi(const std::string &rt, const std::string &rs, unsigned short imm) {
+    stream << "\tandi\t" << rt << ", " << rs << ", " << imm << std::endl;
+  }
+
+  void emit_ori(const std::string &rt, const std::string &rs, unsigned short imm) {
+    stream << "\tori\t" << rt << ", " << rs << ", " << imm << std::endl;
+  }
+
+  void emit_xori(const std::string &rt, const std::string &rs, unsigned short imm) {
+    stream << "\txori\t" << rt << ", " << rs << ", " << imm << std::endl;
+  }
+
+  void emit_lui(const std::string &rt, unsigned short imm) {
+    stream << "\tlui\t" << rt << ", " << imm << std::endl;
+  }
+
+  void emit_lb(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tlb\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
+  }
+
+  void emit_lh(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tlh\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
+  }
+
   void emit_lw(const std::string &rt, const std::string &rs, short imm) {
     stream << "\tlw\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
+  }
+
+  void emit_lbu(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tlbu\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
+  }
+
+  void emit_lhu(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tlhu\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
+  }
+
+  void emit_sb(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tsb\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
+  }
+
+  void emit_sh(const std::string &rt, const std::string &rs, short imm) {
+    stream << "\tsh\t" << rt << ", " << imm << "(" << rs << ")" << std::endl;
   }
 
   void emit_sw(const std::string &rt, const std::string &rs, short imm) {
@@ -179,10 +343,30 @@ public:
   }
 
   void emit_li(const std::string &dst, short imm) {
-    stream << "\tla\t" << dst << ", " << label << std::endl;
+    stream << "\tli\t" << dst << ", " << imm << std::endl;
+  }
+
+  void emit_lw(const std::string &dst, const std::string &label) {
+    stream << "\tlw\t" << dst << ", " << label << std::endl;
   }
 
   void emit_la(const std::string &dst, const std::string &label) {
     stream << "\tla\t" << dst << ", " << label << std::endl;
+  }
+
+  void emit_blt(const std::string &r1, const std::string &r2, unsigned int label) {
+    stream << "\tblt\t" << r1 << ", " << r2 << ", label" << label << std::endl;
+  }
+
+  void emit_ble(const std::string &r1, const std::string &r2, unsigned int label) {
+    stream << "\tble\t" << r1 << ", " << r2 << ", label" << label << std::endl;
+  }
+
+  void emit_bgt(const std::string &r1, const std::string &r2, unsigned int label) {
+    stream << "\tbgt\t" << r1 << ", " << r2 << ", label" << label << std::endl;
+  }
+
+  void emit_bge(const std::string &r1, const std::string &r2, unsigned int label) {
+    stream << "\tbge\t" << r1 << ", " << r2 << ", label" << label << std::endl;
   }
 };

@@ -212,6 +212,13 @@ public:
     const Program *program,
     Symbol *currentType,
     ScopeContext &context) const;
+
+  void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env) const;
 };
 
 class Let : public Expression {
@@ -251,6 +258,10 @@ public:
   Branch(Symbol *name, Symbol *type, Expression *expr)
     : name(name), type(type), expr(expr) {}
 
+  Symbol *getType(void) const {
+    return type;
+  }
+
   virtual void dump(
     std::ostream &stream,
     std::vector<bool> &indents,
@@ -261,6 +272,14 @@ public:
     const Program *program,
     Symbol *currentType,
     ScopeContext &context) const;
+
+  void cgen(
+    CGenContext &context,
+    const InheritanceTree &inheritanceTree,
+    const Program *program,
+    Symbol *currentType,
+    Environment &env,
+    unsigned int esac_label) const;
 };
 
 class Case : public Expression {
