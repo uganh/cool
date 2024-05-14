@@ -19,6 +19,7 @@ InheritanceTree::InheritanceTree(void) : fixed(false) {
       new ClassInfo {
         Symbol::Object, // typeName
         nullptr,        // base
+        true,           // isPrimitive
         true,           // inheritable
         0,              // wordSize
       }
@@ -57,6 +58,7 @@ InheritanceTree::InheritanceTree(void) : fixed(false) {
       new ClassInfo {
         Symbol::IO, // typeName
         root,       // base
+        true,       // isPrimitive
         true,       // inheritable
         0,          // wordSize
         root->dispatchTable,
@@ -100,6 +102,7 @@ InheritanceTree::InheritanceTree(void) : fixed(false) {
       new ClassInfo {
         Symbol::Int, // typeName
         root,        // base
+        true,        // isPrimitive
         false,       // inheritable
         1,           // wordSize
         root->dispatchTable,
@@ -118,8 +121,9 @@ InheritanceTree::InheritanceTree(void) : fixed(false) {
       new ClassInfo {
         Symbol::String, // typeName
         root,           // base
+        true,           // isPrimitive
         false,          // inheritable
-        0,              // wordSize
+        2,              // wordSize
         root->dispatchTable,
       }
     });
@@ -156,8 +160,9 @@ InheritanceTree::InheritanceTree(void) : fixed(false) {
       new ClassInfo {
         Symbol::Bool, // typeName
         root,         // base
+        true,         // isPrimitive
         false,        // inheritable
-        0,            // wordSize
+        1,            // wordSize
         root->dispatchTable,
       }
     });
@@ -325,10 +330,11 @@ bool InheritanceTree::installClass(Symbol *name, Symbol *baseName) {
       base_index,
       baseNode.depth + 1,
       new ClassInfo {
-        name,
-        base,
-        true,
-        base->wordSize,
+        name,           // typeName
+        base,           // base
+        false,          // isPrimitive
+        true,           // inheritable
+        base->wordSize, // wordSize
         base->dispatchTable,
       }
     });
@@ -382,6 +388,7 @@ bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *
     methName,
     new MethodInfo {
       typeName,
+      methName,
       { retType, paramDecls },
       expr,
       index

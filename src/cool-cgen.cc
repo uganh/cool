@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <set>
+#include <stack>
 #include <string>
 
 class Environment {
@@ -105,6 +106,39 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
   // stored in an object. Using this information, the second pass recursively
   // walks each feature and generates stack machine code for each expression.
 
+  const ClassInfo *Int_classInfo = inheritanceTree.getClassInfo(Symbol::Int);
+  const ClassInfo *String_classInfo = inheritanceTree.getClassInfo(Symbol::String);
+  const ClassInfo *Bool_classInfo = inheritanceTree.getClassInfo(Symbol::Bool);
+
+  std::vector<const ClassInfo *> classes = {
+    inheritanceTree.getClassInfo(Symbol::Object),
+    inheritanceTree.getClassInfo(Symbol::IO),
+    Int_classInfo,
+    String_classInfo,
+    Bool_classInfo,
+  };
+
+  emit_globl("Main_protObj");
+  emit_globl("Main_init");
+
+  emit_globl("Main.main");
+  
+  emit_globl("Int_protObj");
+  emit_globl("Int_init");
+
+  emit_globl("String_protObj");
+  emit_globl("String_init");
+
+  emit_globl("_int_tag");
+  emit_globl("_bool_tag");
+  emit_globl("_string_tag");
+
+  emit_globl("bool_const0");
+
+  emit_globl("class_nameTab");
+
+  emit_globl("class_objTab");
+
   stream << "\t.text" << std::endl;
 
   // TODO: Primitives
@@ -115,7 +149,9 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
 
       const ClassInfo *classInfo = inheritanceTree.getClassInfo(typeName);
 
-      /* Generate code for initialization methods */
+      classes.push_back(classInfo);
+
+      /* Initialization methods */
 
       unsigned int locals = 0;
       for (const auto &item : classInfo->attributes) {
@@ -160,7 +196,7 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
       emit_lw(registers::fp, registers::sp, 0);
       emit_jr(registers::ra);
 
-      /* Generate code for methods */
+      /* Methods */
 
       for (const auto &item : classInfo->methods) {
         Symbol *methodName = item.first;
@@ -194,6 +230,172 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
       }
     }
   }
+
+  std::sort(classes.begin(), classes.end(), [] (const ClassInfo *lhs, const ClassInfo *rhs) {
+    return lhs->tag < rhs->tag;
+  });
+
+  stream << "\t.data" << std::endl;
+  stream << "\t.align\t2" << std::endl;
+
+  /* Constants */
+
+  emit_label("_int_tag");
+  emit_word(Int_classInfo->tag);
+
+  emit_label("_bool_tag");
+  emit_word(Bool_classInfo->tag);
+
+  emit_label("_string_tag");
+  emit_word(String_classInfo->tag);
+
+  // Constants: class_nameTab
+  emit_label("class_nameTab");
+  for (const ClassInfo *classInfo : classes) {
+    emit_word(getConstantLabel(classInfo->typeName->to_string()));
+  }
+
+  // Constants: class_objTab
+  emit_label("class_objTab");
+  for (const ClassInfo *classInfo : classes) {
+    emit_word(classInfo->typeName->to_string() + "_protObj");
+    emit_word(classInfo->typeName->to_string() + "_init");
+  }
+
+  for (const ClassInfo *classInfo : classes) {
+    emit_label(classInfo->typeName->to_string() + "_dispTab");
+    for (const MethodInfo *methodInfo : classInfo->dispatchTable) {
+      emit_word(methodInfo->typeName->to_string() + "." + methodInfo->methName->to_string());
+    }
+  }
+
+  for (const ClassInfo *classInfo : classes) {
+    emit_word(-1);
+    emit_label(classInfo->typeName->to_string() + "_protObj");
+    emit_word(classInfo->tag);
+    emit_word(3 + classInfo->wordSize);
+    emit_word(classInfo->typeName->to_string() + "_dispTab");
+    if (classInfo->isPrimitive) {
+      if (classInfo->typeName == Symbol::String) {
+        emit_word(getConstantLabel(0));
+        emit_word(0);
+      }
+      else if (classInfo->typeName == Symbol::Int || classInfo->typeName == Symbol::Bool) {
+        emit_word(0);
+      }
+    }
+    else {
+      std::stack<const ClassInfo *> ancestors;
+      for (const ClassInfo *iter = classInfo; iter; iter = iter->base) {
+        ancestors.push(iter);
+      }
+
+      while (!ancestors.empty()) {
+        const ClassInfo *classInfo = ancestors.top();
+        ancestors.pop();
+
+        for (auto &item : classInfo->attributes) {
+          const AttributeInfo *attributeInfo = item.second;
+          if (attributeInfo->attrType == Symbol::Int) {
+            emit_word(getConstantLabel(0));
+          }
+          else if (attributeInfo->attrType == Symbol::String) {
+            emit_word(getConstantLabel(""));
+          }
+          else if (attributeInfo->attrType == Symbol::Bool) {
+            emit_word("bool_const0");
+          }
+          else {
+            emit_word(0);
+          }
+        }
+      }
+    }
+  }
+
+  for (auto &item : strConstants) {
+    unsigned int size = static_cast<unsigned int>(item.first.size());
+    emit_word(-1);
+    emit_label(item.second);
+    emit_word(String_classInfo->tag);
+    emit_word(3 + 1 + (size + 1) / 4);
+    emit_word(Symbol::String->to_string() + "_dispTab");
+    emit_word(getConstantLabel(size));
+    emit_ascii(item.first);
+    emit_byte(0);
+    emit_align(2);
+  }
+
+  for (auto &item : intConstants) {
+    emit_word(-1);
+    emit_label(item.second);
+    emit_word(Int_classInfo->tag);
+    emit_word(3 + Int_classInfo->wordSize);
+    emit_word(Symbol::Int->to_string() + "_dispTab");
+    emit_word(item.first);
+  }
+
+  emit_word(-1);
+  emit_label("bool_const0");
+  emit_word(Bool_classInfo->tag);
+  emit_word(3 + Bool_classInfo->wordSize);
+  emit_word(Symbol::Bool->to_string() + "_dispTab");
+  emit_word(0);
+
+  emit_word(-1);
+  emit_label("bool_const1");
+  emit_word(Bool_classInfo->tag);
+  emit_word(3 + Bool_classInfo->wordSize);
+  emit_word(Symbol::Bool->to_string() + "_dispTab");
+  emit_word(1);
+}
+
+void CGenContext::emit_ascii(const std::string &value) {
+  static const char *digits = "0123456789abcdef";
+  stream << "\t.ascii\t\"";
+  for (unsigned char c : value) {
+    switch (c) {
+    case '\0':
+      stream << "\\0";
+      break;
+    case '\a':
+      stream << "\\a";
+      break;
+    case '\b':
+      stream << "\\b";
+      break;
+    case '\t':
+      stream << "\\t";
+      break;
+    case '\v':
+      stream << "\\v";
+      break;
+    case '\f':
+      stream << "\\f";
+      break;
+    case '\n':
+      stream << "\\n";
+      break;
+    case '\r':
+      stream << "\\r";
+      break;
+    case '"':
+      stream << "\\\"";
+      break;
+    case '\\':
+      stream << "\\\\";
+      break;
+    default:
+      if (std::isprint(c)) {
+        stream << static_cast<char>(c);
+      }
+      else {
+        stream << "\\x" << digits[c / 4] << digits[c % 16];
+      }
+      break;
+    }
+  }
+  stream << "\"" << std::endl;
 }
 
 void Assign::cgen(
@@ -242,7 +444,7 @@ void Dispatch::cgen(
 
   // Runtime error check: dispatch on void
   context.emit_bne(registers::a0, registers::zero, label);
-  context.emit_la(registers::a0, context.installConstant(program->getName()));
+  context.emit_la(registers::a0, context.getConstantLabel(program->getName()));
   context.emit_li(registers::t1, program->getLine(this));
   context.emit_jal("_dispatch_abort");
 
@@ -375,7 +577,7 @@ void Case::cgen(
 
   // Runtime error check: case on void
   context.emit_bne(registers::a0, registers::zero, case_label);
-  context.emit_la(registers::a0, context.installConstant(program->getName()));
+  context.emit_la(registers::a0, context.getConstantLabel(program->getName()));
   context.emit_li(registers::t1, program->getLine(this));
   context.emit_jal("_case_abort2");
 
@@ -563,7 +765,7 @@ void Integer::cgen(
   const Program *program,
   Symbol *currentType,
   Environment &env) const {
-  context.emit_la(registers::a0, context.installConstant(value));
+  context.emit_la(registers::a0, context.getConstantLabel(value));
 }
 
 void String::cgen(
@@ -572,7 +774,7 @@ void String::cgen(
   const Program *program,
   Symbol *currentType,
   Environment &env) const {
-  context.emit_la(registers::a0, context.installConstant(value));
+  context.emit_la(registers::a0, context.getConstantLabel(value));
 }
 
 void Boolean::cgen(

@@ -43,8 +43,6 @@ int main(int argc, char *argv[]) {
       std::cerr << "Compilation halted due to lex or parse errors" << std::endl;
       return -1;
     }
-
-    program->dump(std::cout);
 #endif
   }
 
@@ -56,8 +54,6 @@ int main(int argc, char *argv[]) {
   }
 
   inheritanceTree.fix();
-
-  std::cout << std::endl;
 
   CGenContext context(std::cout);
   context.cgen(inheritanceTree, programs);

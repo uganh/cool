@@ -17,6 +17,7 @@ struct AttributeInfo {
 
 struct MethodInfo {
   Symbol *typeName;
+  Symbol *methName;
   struct MethodType {
     Symbol *retType;
     std::vector<std::pair<Symbol *, Symbol *>> paramDecls; // (paramName, paramType)
@@ -29,6 +30,7 @@ struct MethodInfo {
 struct ClassInfo {
   Symbol *typeName;
   ClassInfo *base;
+  bool isPrimitive;
   bool inheritable;
   unsigned int wordSize;
   std::vector<MethodInfo *> dispatchTable;

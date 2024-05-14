@@ -67,6 +67,7 @@
 #include "cool-tree.h"
 #include "cool-type.h"
 
+#include <cctype>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -87,7 +88,7 @@ public:
     return label++;
   }
 
-  std::string installConstant(const std::string &sVal) {
+  std::string getConstantLabel(const std::string &sVal) {
     auto iter = strConstants.find(sVal);
     if (iter == strConstants.cend()) {
       auto insertion = strConstants.insert({ sVal, "str_const" + std::to_string(strConstants.size()) });
@@ -97,7 +98,7 @@ public:
     }
   }
 
-  std::string  installConstant(int iVal) {
+  std::string  getConstantLabel(int iVal) {
     auto iter = intConstants.find(iVal);
     if (iter == intConstants.cend()) {
       auto insertion = intConstants.insert({ iVal, "int_const" + std::to_string(intConstants.size()) });
@@ -115,6 +116,28 @@ public:
   void emit_label(const std::string &label) {
     stream << label << ":" << std::endl;
   }
+
+  void emit_globl(const std::string &label) {
+    stream << "\t.globl\t" << label << std::endl;
+  }
+
+  void emit_align(unsigned int align) {
+    stream << "\t.align\t" << align << std::endl;
+  }
+
+  void emit_word(const std::string &label) {
+    stream << "\t.word\t" << label << std::endl;
+  }
+
+  void emit_word(int value) {
+    stream << "\t.word\t" << value << std::endl;
+  }
+
+  void emit_byte(unsigned char byte) {
+    stream << "\t.byte\t" << byte << std::endl;
+  }
+
+  void emit_ascii(const std::string &value);
 
   /**
    * R-type instructions
