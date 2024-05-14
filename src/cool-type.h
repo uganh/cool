@@ -19,7 +19,7 @@ struct MethodInfo {
   Symbol *typeName;
   struct MethodType {
     Symbol *retType;
-    std::vector<std::pair<Symbol *, Symbol *>> paramDecls;
+    std::vector<std::pair<Symbol *, Symbol *>> paramDecls; // (paramName, paramType)
   } methType;
   Expression *expr;
   unsigned int index;
@@ -32,7 +32,8 @@ struct ClassInfo {
   bool inheritable;
   unsigned int wordSize;
   std::vector<MethodInfo *> dispatchTable;
-  std::vector<AttributeInfo *> attributes;
+  std::unordered_map<Symbol *, MethodInfo *> methods;
+  std::unordered_map<Symbol *, AttributeInfo *> attributes;
   unsigned int tag;
   unsigned int tagEnd;
 };
@@ -42,8 +43,6 @@ class InheritanceTree {
     unsigned int base_index;
     unsigned int depth;
     ClassInfo *classInfo;
-    std::unordered_map<Symbol *, MethodInfo *> meths;
-    std::unordered_map<Symbol *, AttributeInfo *> attrs;
   };
 
   bool fixed;

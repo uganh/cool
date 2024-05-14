@@ -73,8 +73,8 @@
 
 class CGenContext {
   unsigned int label;
-  std::unordered_map<std::string, unsigned int> strConstants;
-  std::unordered_map<int, unsigned int> intConstants;
+  std::unordered_map<std::string, std::string> strConstants;
+  std::unordered_map<int, std::string> intConstants;
 
   std::ostream &stream;
 
@@ -87,23 +87,21 @@ public:
     return label++;
   }
 
-  unsigned int installConstant(const std::string &sVal) {
+  std::string installConstant(const std::string &sVal) {
     auto iter = strConstants.find(sVal);
     if (iter == strConstants.cend()) {
-      unsigned int index = static_cast<unsigned int>(strConstants.size());
-      strConstants.insert({ sVal, index });
-      return index;
+      auto insertion = strConstants.insert({ sVal, "str_const" + std::to_string(strConstants.size()) });
+      return insertion.first->second;
     } else {
       return iter->second;
     }
   }
 
-  unsigned int installConstant(int iVal) {
+  std::string  installConstant(int iVal) {
     auto iter = intConstants.find(iVal);
     if (iter == intConstants.cend()) {
-      unsigned int index = static_cast<unsigned int>(intConstants.size());
-      intConstants.insert({ iVal, index });
-      return index;
+      auto insertion = intConstants.insert({ iVal, "int_const" + std::to_string(intConstants.size()) });
+      return insertion.first->second;
     }
     else {
       return iter->second;

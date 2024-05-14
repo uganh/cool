@@ -932,7 +932,7 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
   // The identifiers used in the formal parameter list must be distinct.
   std::unordered_set<Symbol *> uniqueParamNames;
 
-  std::vector<std::pair<Symbol *, Symbol *>> params;
+  std::vector<std::pair<Symbol *, Symbol *>> paramDecls;
 
   for (Formal *formal : formals) {
     Symbol *paramName = formal->getName();
@@ -987,7 +987,7 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
       uniqueParamNames.insert(paramName);
     }
 
-    params.push_back({ paramName, paramType });
+    paramDecls.push_back({ paramName, paramType });
   }
 
   if (type != Symbol::SELF_TYPE && !inheritanceTree.isDefined(type)) {
@@ -1033,7 +1033,7 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
       errors++;
     } else {
       Symbol *originalRetType = methInfo->methType.retType;
-      const std::vector<std::pair<Symbol *, Symbol *>> &originalParams = methInfo->methType.paramDecls;
+      const std::vector<std::pair<Symbol *, Symbol *>> &originalParamDecls = methInfo->methType.paramDecls;
 
       if (originalRetType != type) {
         // TODO: "In redefined method {name}, return type {type} is different from original return type {originalRetType}."
@@ -1052,7 +1052,7 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
         errors++;
       }
 
-      if (originalParams.size() != params.size()) {
+      if (originalParamDecls.size() != paramDecls.size()) {
         // TODO: "Incompatible number of formal parameters in redefined method {name}."
         std::cerr << program->getName()
                   << ":"
@@ -1064,9 +1064,9 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
 
         errors++;
       } else {
-        for (size_t index = 0; index < params.size(); index++) {
-          Symbol *paramType = params[index].second;
-          Symbol *originalParamType = originalParams[index].second;
+        for (size_t index = 0; index < paramDecls.size(); index++) {
+          Symbol *paramType = paramDecls[index].second;
+          Symbol *originalParamType = originalParamDecls[index].second;
           if (paramType != originalParamType) {
             // TODO: "In redefined method {name}, parameter type {paramType} is different from original type {originalParamType}."
             std::cerr << program->getName()
@@ -1094,7 +1094,7 @@ void Method::install(InheritanceTree &inheritanceTree, const Program *program, S
 
   /* 3. Install method to the environment */
 
-  bool ok = inheritanceTree.installMethod(currentType, name, type, params, expr);
+  bool ok = inheritanceTree.installMethod(currentType, name, type, paramDecls, expr);
   assert(ok);
 }
 

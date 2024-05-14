@@ -12,9 +12,9 @@ class Environment {
 public:
   Environment(void) : numParams(0) {}
 
-  explicit Environment(const std::vector<Formal *> &formals) : numParams(formals.size()) {
-    for (size_t i = 0, n = formals.size(); i < n; i++) {
-      locals.define(formals[i]->getName(), static_cast<int>(i * 4 + 4));
+  explicit Environment(const std::vector<Symbol *> &params) : numParams(params.size()) {
+    for (size_t i = 0, n = params.size(); i < n; i++) {
+      locals.define(params[i], static_cast<int>(n - i) * 4);
     }
   }
 
@@ -107,20 +107,25 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
 
   stream << "\t.text" << std::endl;
 
+  // TODO: Primitives
+
   for (Program *program : programs) {
     for (Class *claSs : program->getClasses()) {
       Symbol *typeName = claSs->getName();
 
       const ClassInfo *classInfo = inheritanceTree.getClassInfo(typeName);
 
-      /* Generate initialization methods */
+      /* Generate code for initialization methods */
 
       unsigned int locals = 0;
-      for (const AttributeInfo *attributeInfo : classInfo->attributes) {
+      for (const auto &item : classInfo->attributes) {
+        const AttributeInfo *attributeInfo = item.second;
         if (attributeInfo->locals > locals) {
           locals = attributeInfo->locals;
         }
       }
+
+      Environment env;
 
       emit_label(classInfo->typeName->to_string() + "_init");
 
@@ -136,8 +141,8 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
         emit_jal(classInfo->base->typeName->to_string() + "_init");
       }
 
-      Environment env;
-      for (const AttributeInfo *attributeInfo : classInfo->attributes) {
+      for (const auto &item : classInfo->attributes) {
+        const AttributeInfo *attributeInfo = item.second;
         if (attributeInfo->init) {
           attributeInfo->init->cgen(*this, inheritanceTree, program, typeName, env);
           emit_sw(registers::a0, registers::s0, 12 + attributeInfo->wordOffset * 4);
@@ -155,19 +160,40 @@ void CGenContext::cgen(const InheritanceTree &inheritanceTree, const std::vector
       emit_lw(registers::fp, registers::sp, 0);
       emit_jr(registers::ra);
 
-      for (const MethodInfo *methodInfo : classInfo->dispatchTable) {
+      /* Generate code for methods */
 
+      for (const auto &item : classInfo->methods) {
+        Symbol *methodName = item.first;
+        const MethodInfo *methodInfo = item.second;
+
+        std::vector<Symbol *> params;
+        for (auto &paramDecl : methodInfo->methType.paramDecls) {
+          params.push_back(paramDecl.first);
+        }
+
+        Environment env(params);
+
+        emit_label(classInfo->typeName->to_string() + "." + methodName->to_string());
+
+        emit_sw(registers::fp, registers::sp, 0);
+        emit_sw(registers::s0, registers::sp, -4);
+        emit_sw(registers::ra, registers::sp, -8);
+        emit_move(registers::fp, registers::sp);
+        emit_addiu(registers::sp, registers::sp, -12 - static_cast<int>(methodInfo->locals) * 4);
+
+        emit_move(registers::s0, registers::a0);
+
+        methodInfo->expr->cgen(*this, inheritanceTree, program, typeName, env);
+
+        emit_move(registers::sp, registers::fp);
+        emit_lw(registers::ra, registers::sp, -8);
+        emit_lw(registers::s0, registers::sp, -4);
+        emit_lw(registers::fp, registers::sp, 0);
+        emit_addiu(registers::sp, registers::sp, static_cast<int>(params.size()) * 4);
+        emit_jr(registers::ra);
       }
     }
   }
-}
-
-static inline std::string int_const(unsigned int index) {
-  return "int_const" + std::to_string(index);
-}
-
-static inline std::string str_const(unsigned int index) {
-  return "str_const" + std::to_string(index);
 }
 
 void Assign::cgen(
@@ -216,7 +242,7 @@ void Dispatch::cgen(
 
   // Runtime error check: dispatch on void
   context.emit_bne(registers::a0, registers::zero, label);
-  context.emit_la(registers::a0, str_const(context.installConstant(program->getName())));
+  context.emit_la(registers::a0, context.installConstant(program->getName()));
   context.emit_li(registers::t1, program->getLine(this));
   context.emit_jal("_dispatch_abort");
 
@@ -349,7 +375,7 @@ void Case::cgen(
 
   // Runtime error check: case on void
   context.emit_bne(registers::a0, registers::zero, case_label);
-  context.emit_la(registers::a0, str_const(context.installConstant(program->getName())));
+  context.emit_la(registers::a0, context.installConstant(program->getName()));
   context.emit_li(registers::t1, program->getLine(this));
   context.emit_jal("_case_abort2");
 
@@ -537,7 +563,7 @@ void Integer::cgen(
   const Program *program,
   Symbol *currentType,
   Environment &env) const {
-  context.emit_la(registers::a0, int_const(context.installConstant(value)));
+  context.emit_la(registers::a0, context.installConstant(value));
 }
 
 void String::cgen(
@@ -546,7 +572,7 @@ void String::cgen(
   const Program *program,
   Symbol *currentType,
   Environment &env) const {
-  context.emit_la(registers::a0, str_const(context.installConstant(value)));
+  context.emit_la(registers::a0, context.installConstant(value));
 }
 
 void Boolean::cgen(

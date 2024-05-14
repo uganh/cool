@@ -165,11 +165,11 @@ InheritanceTree::InheritanceTree(void) : fixed(false) {
 
 InheritanceTree::~InheritanceTree(void) {
   for (Node &node : nodes) {
-    for (auto &item : node.attrs) {
+    for (auto &item : node.classInfo->attributes) {
       delete item.second;
     }
 
-    for (auto &item : node.meths) {
+    for (auto &item : node.classInfo->methods) {
       delete item.second;
     }
 
@@ -265,8 +265,8 @@ const AttributeInfo *InheritanceTree::getAttributeInfo(Symbol *typeName, Symbol 
     unsigned int type_index = iter->second;
     while (type_index != -1) {
       const Node &node = nodes[type_index];
-      auto iter = node.attrs.find(attrName);
-      if (iter != node.attrs.cend()) {
+      auto iter = node.classInfo->attributes.find(attrName);
+      if (iter != node.classInfo->attributes.cend()) {
         return iter->second;
       }
       type_index = node.base_index;
@@ -281,8 +281,8 @@ const MethodInfo *InheritanceTree::getMethodInfo(Symbol *typeName, Symbol *methN
     unsigned int type_index = iter->second;
     while (type_index != -1) {
       const Node &node = nodes[type_index];
-      auto iter = node.meths.find(methName);
-      if (iter != node.meths.cend()) {
+      auto iter = node.classInfo->methods.find(methName);
+      if (iter != node.classInfo->methods.cend()) {
         return iter->second;
       }
       type_index = node.base_index;
@@ -345,7 +345,7 @@ bool InheritanceTree::installAttribute(Symbol *typeName, Symbol *attrName, Symbo
   Node &node = nodes[iter->second];
   ClassInfo *classInfo = node.classInfo;
 
-  auto insertion = node.attrs.insert(
+  auto insertion = classInfo->attributes.insert(
     {
       attrName,
       new AttributeInfo {
@@ -357,7 +357,6 @@ bool InheritanceTree::installAttribute(Symbol *typeName, Symbol *attrName, Symbo
     });
 
   if (insertion.second) {
-    classInfo->attributes.push_back(insertion.first->second);
     classInfo->wordSize++;
     return true;
   }
@@ -379,7 +378,7 @@ bool InheritanceTree::installMethod(Symbol *typeName, Symbol *methName, Symbol *
     baseMethodInfo->index :
     static_cast<unsigned int>(classInfo->dispatchTable.size());
 
-  auto insertion = node.meths.insert({
+  auto insertion = classInfo->methods.insert({
     methName,
     new MethodInfo {
       typeName,
